@@ -1,0 +1,45 @@
+# Node
+node_modules/
+jspm_packages/
+dist/
+build/
+build/Release
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.npm
+.eslintcache
+.stylelintcache
+.node_repl_history
+*.tgz
+.yarn-integrity
+.pnpm-store
+.pnp.*
+.vite/
+vite.config.*.timestamp-*
+
+# Env
+.env
+.env.*
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# ML artifacts
+ml-service/models/*.joblib
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local Gophish install (not part of this monorepo)
+/gophish/

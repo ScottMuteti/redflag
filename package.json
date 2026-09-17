@@ -1,0 +1,13 @@
+{
+  "name": "redflag",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "lint": "npm run lint --workspace=backend && npm run lint --workspace=frontend",
+    "test": "npm test --workspace=backend"
+  }
+}
