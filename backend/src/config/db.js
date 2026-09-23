@@ -3,4 +3,7 @@ const env = require('./env');
 
 const pool = new Pool(env.db);
 
-module.exports = pool;
+module.exports = {
+  query: (text, params) => pool.query(text, params),
+  getClient: () => pool.connect(),
+};

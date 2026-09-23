@@ -13,6 +13,7 @@ module.exports = {
   gophish: {
     apiUrl: process.env.GOPHISH_API_URL || '',
     apiKey: process.env.GOPHISH_API_KEY || '',
+    webhookSecret: process.env.GOPHISH_WEBHOOK_SECRET || '',
   },
   africasTalking: {
     apiKey: process.env.AT_API_KEY || '',

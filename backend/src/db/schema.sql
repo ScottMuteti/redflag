@@ -4,7 +4,7 @@
 
 CREATE TABLE organizations (
   id SERIAL PRIMARY KEY,
-  name VARCHAR(255) NOT NULL,
+  name VARCHAR(255) NOT NULL UNIQUE,
   industry VARCHAR(100),
   county VARCHAR(100),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -36,6 +36,7 @@ CREATE TABLE employees (
   email VARCHAR(255) NOT NULL UNIQUE,
   phone_number VARCHAR(20),
   job_title VARCHAR(150),
+  hire_date DATE,
   password_hash VARCHAR(255) NOT NULL,
   role VARCHAR(20) NOT NULL DEFAULT 'employee' CHECK (role = 'employee'),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -77,6 +78,30 @@ CREATE TABLE susceptibility_scores (
   computed_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE training_modules (
+  id SERIAL PRIMARY KEY,
+  organization_id INTEGER NOT NULL REFERENCES organizations (id) ON DELETE CASCADE,
+  title VARCHAR(255) NOT NULL,
+  description TEXT,
+  content_url VARCHAR(500),
+  category VARCHAR(100),
+  quiz JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE training_assignments (
+  id SERIAL PRIMARY KEY,
+  training_module_id INTEGER NOT NULL REFERENCES training_modules (id) ON DELETE CASCADE,
+  employee_id INTEGER NOT NULL REFERENCES employees (id) ON DELETE CASCADE,
+  assigned_by INTEGER REFERENCES admin_users (id) ON DELETE SET NULL,
+  assigned_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  due_at TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ,
+  status VARCHAR(20) NOT NULL DEFAULT 'assigned'
+    CHECK (status IN ('assigned', 'in_progress', 'completed', 'overdue')),
+  UNIQUE (training_module_id, employee_id)
+);
+
 CREATE INDEX idx_admin_users_org ON admin_users (organization_id);
 CREATE INDEX idx_departments_org ON departments (organization_id);
 CREATE INDEX idx_employees_org ON employees (organization_id);
@@ -84,3 +109,6 @@ CREATE INDEX idx_campaigns_org ON simulation_campaigns (organization_id);
 CREATE INDEX idx_attempts_campaign ON simulation_attempts (campaign_id);
 CREATE INDEX idx_attempts_employee ON simulation_attempts (employee_id);
 CREATE INDEX idx_scores_employee ON susceptibility_scores (employee_id);
+CREATE INDEX idx_training_modules_org ON training_modules (organization_id);
+CREATE INDEX idx_training_assignments_module ON training_assignments (training_module_id);
+CREATE INDEX idx_training_assignments_employee ON training_assignments (employee_id);
