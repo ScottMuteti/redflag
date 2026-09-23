@@ -2,6 +2,8 @@
 -- Every tenant-scoped table carries organization_id (directly or via a
 -- foreign key chain) so row-level access can be filtered per organization.
 
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 CREATE TABLE organizations (
   id SERIAL PRIMARY KEY,
   name VARCHAR(255) NOT NULL UNIQUE,
@@ -49,6 +51,9 @@ CREATE TABLE simulation_campaigns (
   name VARCHAR(255) NOT NULL,
   type VARCHAR(10) NOT NULL CHECK (type IN ('email', 'sms')),
   template_key VARCHAR(100),
+  difficulty_level VARCHAR(10) NOT NULL DEFAULT 'medium'
+    CHECK (difficulty_level IN ('easy', 'medium', 'hard')),
+  gophish_campaign_id INTEGER,
   status VARCHAR(20) NOT NULL DEFAULT 'draft'
     CHECK (status IN ('draft', 'scheduled', 'running', 'completed')),
   scheduled_at TIMESTAMPTZ,
@@ -59,6 +64,7 @@ CREATE TABLE simulation_attempts (
   id SERIAL PRIMARY KEY,
   campaign_id INTEGER NOT NULL REFERENCES simulation_campaigns (id) ON DELETE CASCADE,
   employee_id INTEGER NOT NULL REFERENCES employees (id) ON DELETE CASCADE,
+  tracking_token UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
   sent_at TIMESTAMPTZ,
   opened_at TIMESTAMPTZ,
   clicked_at TIMESTAMPTZ,
@@ -66,6 +72,20 @@ CREATE TABLE simulation_attempts (
   reported_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (campaign_id, employee_id)
+);
+
+CREATE TABLE campaign_templates (
+  id SERIAL PRIMARY KEY,
+  organization_id INTEGER REFERENCES organizations (id) ON DELETE CASCADE,
+  type VARCHAR(10) NOT NULL CHECK (type IN ('email', 'sms')),
+  key VARCHAR(100) NOT NULL,
+  name VARCHAR(255) NOT NULL,
+  subject VARCHAR(255),
+  body TEXT NOT NULL,
+  category VARCHAR(100),
+  is_default BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (organization_id, key)
 );
 
 CREATE TABLE susceptibility_scores (
@@ -112,3 +132,31 @@ CREATE INDEX idx_scores_employee ON susceptibility_scores (employee_id);
 CREATE INDEX idx_training_modules_org ON training_modules (organization_id);
 CREATE INDEX idx_training_assignments_module ON training_assignments (training_module_id);
 CREATE INDEX idx_training_assignments_employee ON training_assignments (employee_id);
+CREATE INDEX idx_campaign_templates_org ON campaign_templates (organization_id);
+
+-- Default Kenya-specific simulation templates, shared across all organizations
+-- (organization_id IS NULL). Admins can add org-specific templates alongside these.
+--
+-- SMS templates use our own {{link}} placeholder, substituted manually in
+-- campaigns.routes.js with each employee's tracking URL (Africa's Talking is
+-- a plain SMS gateway with no template engine of its own). Email templates
+-- use Gophish's own {{.URL}} merge field instead — Gophish substitutes it
+-- per-recipient itself when the campaign is sent, and its template parser
+-- rejects a bare, undotted {{link}} as invalid Go template syntax.
+INSERT INTO campaign_templates (organization_id, type, key, name, subject, body, category, is_default) VALUES
+  (NULL, 'sms', 'mpesa-alert', 'M-Pesa Account Alert',
+   NULL,
+   'M-PESA: Your account has been temporarily suspended due to unusual activity. Verify now to avoid deactivation: {{link}}',
+   'mpesa', true),
+  (NULL, 'email', 'safaricom-impersonation', 'Safaricom Account Verification',
+   'Action Required: Verify Your Safaricom Account',
+   '<p>Dear Customer,</p><p>We have detected unusual activity on your Safaricom account. To avoid suspension, please verify your details immediately by clicking the link below.</p><p><a href="{{.URL}}">Verify My Account</a></p><p>Safaricom Customer Care</p>',
+   'safaricom', true),
+  (NULL, 'email', 'kra-notice', 'KRA Tax Compliance Notice',
+   'URGENT: KRA Tax Compliance Notice',
+   '<p>Dear Taxpayer,</p><p>Kenya Revenue Authority records indicate an outstanding compliance issue on your PIN. Failure to resolve this within 48 hours may result in penalties.</p><p><a href="{{.URL}}">Resolve Now</a></p><p>Kenya Revenue Authority</p>',
+   'kra', true),
+  (NULL, 'email', 'invoice-fraud', 'Overdue Invoice Notice',
+   'Overdue Invoice - Immediate Payment Required',
+   '<p>Dear Accounts Team,</p><p>Please find attached the overdue invoice for services rendered. Kindly review and process payment via the link below to avoid service interruption.</p><p><a href="{{.URL}}">Review Invoice</a></p>',
+   'invoice', true);

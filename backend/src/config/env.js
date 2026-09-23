@@ -14,10 +14,14 @@ module.exports = {
     apiUrl: process.env.GOPHISH_API_URL || '',
     apiKey: process.env.GOPHISH_API_KEY || '',
     webhookSecret: process.env.GOPHISH_WEBHOOK_SECRET || '',
+    smtpProfile: process.env.GOPHISH_SMTP_PROFILE || 'RedFlag SMTP',
+    landingPage: process.env.GOPHISH_LANDING_PAGE || 'RedFlag Awareness Landing',
+    phishUrl: process.env.GOPHISH_PHISH_URL || 'http://localhost:8080',
   },
   africasTalking: {
     apiKey: process.env.AT_API_KEY || '',
     username: process.env.AT_USERNAME || 'sandbox',
   },
   mlServiceUrl: process.env.ML_SERVICE_URL || 'http://localhost:8000',
+  publicBackendUrl: process.env.PUBLIC_BACKEND_URL || 'http://localhost:4000',
 };

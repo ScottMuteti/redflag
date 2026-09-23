@@ -34,6 +34,17 @@ services:
     volumes:
       - ./ml-service:/app
 
+  # Official pre-built image — the vendored ./gophish directory ships only
+  # static assets/migrations/config, not buildable Go source.
+  gophish:
+    image: gophish/gophish:latest
+    restart: unless-stopped
+    ports:
+      - "33330:3333" # host port shifted — 3333 falls in Windows' reserved dynamic port range
+      - "8080:8080"
+    volumes:
+      - ./docker/gophish/config.json:/opt/gophish/config.json
+
   frontend:
     build: ./frontend
     restart: unless-stopped
