@@ -13,6 +13,9 @@ import {
   YAxis,
 } from 'recharts';
 import { getOrganizationAnalytics } from '../../api/analytics';
+import { Card, Empty, Loading, PageHeader, RiskBadge } from '../../components/ui';
+
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
 const asPercent = (value) =>
   value === null || value === undefined ? '—' : `${Math.round(value * 100)}%`;
@@ -46,8 +49,14 @@ function AnalyticsDashboard() {
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <p>Loading…</p>;
-  if (!data) return <p>No analytics available yet.</p>;
+  if (loading) return <Loading />;
+  if (!data) return <Empty title="No analytics available yet" />;
+
+  const totals = data.campaigns.reduce(
+    (acc, c) => ({ sent: acc.sent + c.totalAttempts, clicked: acc.clicked + c.clicked }),
+    { sent: 0, clicked: 0 },
+  );
+  const scoredEmployees = data.departments.reduce((sum, d) => sum + d.employeeCount, 0);
 
   // Spread the two end labels apart when the lines finish close together.
   const last = data.trend[data.trend.length - 1] || {};
@@ -58,14 +67,29 @@ function AnalyticsDashboard() {
   const labelOffset = (i) => (endsClose ? (i === 0 ? -8 : 8) : 0);
 
   return (
-    <section>
-      <h2>Organization analytics</h2>
+    <div className="stack">
+      <PageHeader title="Dashboard" subtitle="Your organization's security posture at a glance." />
+
       <div className="stat-cards">
         <div className="stat-card">
           <span className="stat-label">Org risk score (weighted)</span>
           <span className="stat-value">{asPercent(data.riskScore)}</span>
+          <span>
+            <RiskBadge level={data.riskLevel} />
+          </span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-label">Employees scored</span>
+          <span className="stat-value">{scoredEmployees}</span>
+          <span className="stat-sub">across {plural(data.departments.length, 'department')}</span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-label">Overall click rate</span>
+          <span className="stat-value">
+            {totals.sent ? asPercent(totals.clicked / totals.sent) : '—'}
+          </span>
           <span className="stat-sub">
-            {data.riskLevel ? `${data.riskLevel} risk` : 'no scores computed yet'}
+            {plural(totals.clicked, 'click')} from {plural(data.campaigns.length, 'campaign')}
           </span>
         </div>
         <div className="stat-card">
@@ -77,138 +101,147 @@ function AnalyticsDashboard() {
         </div>
       </div>
 
-      <h3>Trend by week</h3>
-      {data.trend.length === 0 ? (
-        <p>No history yet — trends appear once scores are computed and campaigns sent.</p>
-      ) : (
-        <ResponsiveContainer width="100%" height={260}>
-          <LineChart data={data.trend} margin={{ top: 16, right: 150, left: 0, bottom: 0 }}>
-            <CartesianGrid stroke="#e1e0d9" vertical={false} />
-            <XAxis
-              dataKey="week"
-              tick={axisTick}
-              axisLine={{ stroke: '#c3c2b7' }}
-              tickLine={false}
-            />
-            <YAxis
-              domain={[0, 1]}
-              tickFormatter={asPercent}
-              tick={axisTick}
-              axisLine={false}
-              tickLine={false}
-              width={44}
-            />
-            <Tooltip
-              formatter={(value) => asPercent(value)}
-              labelFormatter={(week) => `Week of ${week}`}
-              contentStyle={{ fontSize: 13 }}
-              cursor={{ stroke: '#c3c2b7', strokeWidth: 1 }}
-            />
-            <Legend
-              verticalAlign="top"
-              align="left"
-              height={28}
-              iconType="plainline"
-              formatter={(name) => <span style={{ color: '#52514e' }}>{name}</span>}
-              wrapperStyle={{ fontSize: 12 }}
-            />
-            {TREND_SERIES.map((series, i) => (
-              <Line
-                key={series.key}
-                dataKey={series.key}
-                name={series.name}
-                stroke={series.color}
-                strokeWidth={2}
-                dot={{ r: 4, strokeWidth: 2, fill: '#fcfcfb' }}
-                activeDot={{ r: 5 }}
-                connectNulls
-                isAnimationActive={false}
-              >
-                <LabelList
-                  dataKey={series.key}
-                  content={(props) => (
-                    <EndLabel
-                      {...props}
-                      name={series.name}
-                      lastIndex={data.trend.length - 1}
-                      dy={labelOffset(i)}
-                    />
-                  )}
-                />
-              </Line>
-            ))}
-          </LineChart>
-        </ResponsiveContainer>
-      )}
-
-      <h3>Risk by department</h3>
-      {data.departments.length === 0 ? (
-        <p>No scored employees yet — compute a score from the employee roster first.</p>
-      ) : (
-        <ResponsiveContainer width="100%" height={260}>
-          <BarChart data={data.departments} margin={{ top: 24, right: 8, left: 0, bottom: 0 }}>
-            <CartesianGrid stroke="#e1e0d9" vertical={false} />
-            <XAxis
-              dataKey="department"
-              tick={axisTick}
-              axisLine={{ stroke: '#c3c2b7' }}
-              tickLine={false}
-            />
-            <YAxis
-              domain={[0, 1]}
-              tickFormatter={asPercent}
-              tick={{ fill: '#898781', fontSize: 12 }}
-              axisLine={false}
-              tickLine={false}
-              width={44}
-            />
-            <Tooltip
-              formatter={(value) => asPercent(value)}
-              contentStyle={{ fontSize: 13 }}
-              cursor={{ fill: 'rgba(11, 11, 11, 0.04)' }}
-            />
-            <Bar dataKey="avgScore" fill="#2a78d6" radius={[4, 4, 0, 0]} maxBarSize={56}>
-              <LabelList
-                dataKey="avgScore"
-                position="top"
-                formatter={asPercent}
-                style={{ fill: '#52514e', fontSize: 12 }}
+      <Card title="Trend by week" subtitle="Average risk score and click rate over time.">
+        {data.trend.length === 0 ? (
+          <Empty title="No history yet">
+            Trends appear once scores are computed and campaigns sent.
+          </Empty>
+        ) : (
+          <ResponsiveContainer width="100%" height={260}>
+            <LineChart data={data.trend} margin={{ top: 16, right: 150, left: 0, bottom: 0 }}>
+              <CartesianGrid stroke="#e1e0d9" vertical={false} />
+              <XAxis
+                dataKey="week"
+                tick={axisTick}
+                axisLine={{ stroke: '#c3c2b7' }}
+                tickLine={false}
               />
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-      )}
+              <YAxis
+                domain={[0, 1]}
+                tickFormatter={asPercent}
+                tick={axisTick}
+                axisLine={false}
+                tickLine={false}
+                width={44}
+              />
+              <Tooltip
+                formatter={(value) => asPercent(value)}
+                labelFormatter={(week) => `Week of ${week}`}
+                contentStyle={{ fontSize: 13 }}
+                cursor={{ stroke: '#c3c2b7', strokeWidth: 1 }}
+              />
+              <Legend
+                verticalAlign="top"
+                align="left"
+                height={28}
+                iconType="plainline"
+                formatter={(name) => <span style={{ color: '#52514e' }}>{name}</span>}
+                wrapperStyle={{ fontSize: 12 }}
+              />
+              {TREND_SERIES.map((series, i) => (
+                <Line
+                  key={series.key}
+                  dataKey={series.key}
+                  name={series.name}
+                  stroke={series.color}
+                  strokeWidth={2}
+                  dot={{ r: 4, strokeWidth: 2, fill: '#fcfcfb' }}
+                  activeDot={{ r: 5 }}
+                  connectNulls
+                  isAnimationActive={false}
+                >
+                  <LabelList
+                    dataKey={series.key}
+                    content={(props) => (
+                      <EndLabel
+                        {...props}
+                        name={series.name}
+                        lastIndex={data.trend.length - 1}
+                        dy={labelOffset(i)}
+                      />
+                    )}
+                  />
+                </Line>
+              ))}
+            </LineChart>
+          </ResponsiveContainer>
+        )}
+      </Card>
 
-      <h3>Campaign funnel</h3>
-      {data.campaigns.length === 0 ? (
-        <p>No campaigns yet.</p>
-      ) : (
-        <table>
-          <thead>
-            <tr>
-              <th>Campaign</th>
-              <th>Sent</th>
-              <th>Opened</th>
-              <th>Clicked</th>
-              <th>Submitted</th>
-              <th>Reported</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.campaigns.map((c) => (
-              <tr key={c.id}>
-                <td>{c.name}</td>
-                <td>{c.totalAttempts}</td>
-                <td>{c.opened}</td>
-                <td>{c.clicked}</td>
-                <td>{c.submitted}</td>
-                <td>{c.reported}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </section>
+      <Card title="Risk by department" subtitle="Average latest risk score per department.">
+        {data.departments.length === 0 ? (
+          <Empty title="No scored employees yet">
+            Compute scores from the Employees page first.
+          </Empty>
+        ) : (
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={data.departments} margin={{ top: 24, right: 8, left: 0, bottom: 0 }}>
+              <CartesianGrid stroke="#e1e0d9" vertical={false} />
+              <XAxis
+                dataKey="department"
+                tick={axisTick}
+                axisLine={{ stroke: '#c3c2b7' }}
+                tickLine={false}
+              />
+              <YAxis
+                domain={[0, 1]}
+                tickFormatter={asPercent}
+                tick={axisTick}
+                axisLine={false}
+                tickLine={false}
+                width={44}
+              />
+              <Tooltip
+                formatter={(value) => asPercent(value)}
+                contentStyle={{ fontSize: 13 }}
+                cursor={{ fill: 'rgba(11, 11, 11, 0.04)' }}
+              />
+              <Bar dataKey="avgScore" fill="#2a78d6" radius={[4, 4, 0, 0]} maxBarSize={56}>
+                <LabelList
+                  dataKey="avgScore"
+                  position="top"
+                  formatter={asPercent}
+                  style={{ fill: '#52514e', fontSize: 12 }}
+                />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+      </Card>
+
+      <Card title="Campaign funnel" className="card-flush">
+        {data.campaigns.length === 0 ? (
+          <Empty title="No campaigns yet" />
+        ) : (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Campaign</th>
+                  <th className="num">Targeted</th>
+                  <th className="num">Opened</th>
+                  <th className="num">Clicked</th>
+                  <th className="num">Submitted</th>
+                  <th className="num">Reported</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.campaigns.map((c) => (
+                  <tr key={c.id}>
+                    <td className="cell-main">{c.name}</td>
+                    <td className="num">{c.totalAttempts}</td>
+                    <td className="num">{c.opened}</td>
+                    <td className="num">{c.clicked}</td>
+                    <td className="num">{c.submitted}</td>
+                    <td className="num">{c.reported}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+    </div>
   );
 }
 

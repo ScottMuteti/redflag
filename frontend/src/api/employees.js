@@ -1,7 +1,9 @@
 import apiClient from './client';
 
 export function listEmployees(departmentId) {
-  return apiClient.get('/employees', { params: departmentId ? { departmentId } : {} }).then((res) => res.data);
+  return apiClient
+    .get('/employees', { params: departmentId ? { departmentId } : {} })
+    .then((res) => res.data);
 }
 
 export function listDepartments() {

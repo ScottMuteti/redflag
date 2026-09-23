@@ -5,7 +5,9 @@ export function listAssignments() {
 }
 
 export function submitQuiz(assignmentId, answers) {
-  return apiClient.post(`/training/assignments/${assignmentId}/complete`, { answers }).then((res) => res.data);
+  return apiClient
+    .post(`/training/assignments/${assignmentId}/complete`, { answers })
+    .then((res) => res.data);
 }
 
 export function listModules() {
