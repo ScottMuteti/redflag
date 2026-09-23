@@ -27,8 +27,21 @@ logistic regression. Final year project for Kenyan organizations.
 Ports: Postgres `5432`, backend `4000`, ml-service `8000`, frontend `5173`.
 
 Or run each service on its own: `npm run dev` (backend/frontend) or
-`uvicorn app.api:app --reload` (ml-service, after `pip install -r requirements.txt`).
+`uvicorn app.api:app --reload` (ml-service, Python 3.11, after `pip install -r requirements.txt`).
+
+## ML model
+
+- Docker: trains on first start if `ml-service/models/latest.joblib` is missing
+- Manual: `python -m app.generate_sample_data && python -m app.train` (in `ml-service/`)
+- Trained on synthetic data until real simulation history exists
 
 ## Status
 
-Scaffolding only — no app logic yet.
+- Auth, org registration, employee roster
+- Email (Gophish) and SMS (Africa's Talking) campaigns, scheduling, template customisation
+- Susceptibility scoring, adaptive training with quizzes, analytics dashboard
+
+## Known constraints
+
+- Africa's Talking sandbox: no custom sender ID; messages go to the simulator only
+- Schema is a single `schema.sql` run on first DB init — no migration tool yet

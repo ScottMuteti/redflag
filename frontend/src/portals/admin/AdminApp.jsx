@@ -2,10 +2,7 @@ import { Routes, Route, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import EmployeeRoster from './EmployeeRoster';
 import CampaignsPage from './CampaignsPage';
-
-function AdminHome() {
-  return <p>Welcome to the RedFlag admin dashboard. Analytics tools land in a later sprint.</p>;
-}
+import AnalyticsDashboard from './AnalyticsDashboard';
 
 function AdminApp() {
   const { user, logout } = useAuth();
@@ -31,7 +28,7 @@ function AdminApp() {
       </header>
       <main>
         <Routes>
-          <Route path="/" element={<AdminHome />} />
+          <Route path="/" element={<AnalyticsDashboard />} />
           <Route path="/employees" element={<EmployeeRoster />} />
           <Route path="/campaigns" element={<CampaignsPage />} />
         </Routes>

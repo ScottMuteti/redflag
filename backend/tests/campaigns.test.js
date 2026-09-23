@@ -106,6 +106,60 @@ describe('campaigns routes', () => {
     const res = await request(app).post('/api/campaigns/3/launch').set('Authorization', `Bearer ${token}`).send({});
     expect(res.statusCode).toBe(409);
   });
+
+  it('creates a scheduled campaign when scheduledAt is given', async () => {
+    db.query.mockResolvedValueOnce({ rows: [{ id: 4, status: 'scheduled' }] });
+
+    const res = await request(app)
+      .post('/api/campaigns')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Later', type: 'sms', templateKey: 'mpesa-alert', scheduledAt: '2026-10-01T09:00:00Z' });
+
+    expect(res.statusCode).toBe(201);
+    expect(db.query.mock.calls[0][1]).toEqual(expect.arrayContaining(['scheduled', '2026-10-01T09:00:00Z']));
+  });
+
+  it('rejects an invalid scheduledAt', async () => {
+    const res = await request(app)
+      .post('/api/campaigns')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Later', type: 'sms', templateKey: 'mpesa-alert', scheduledAt: 'not-a-date' });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('saves an org copy of a template', async () => {
+    db.query.mockResolvedValueOnce({ rows: [{ key: 'mpesa-alert', body: 'Custom {{link}}', isCustom: true }] });
+
+    const res = await request(app)
+      .put('/api/campaigns/templates/mpesa-alert')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ body: 'Custom {{link}}' });
+
+    expect(res.statusCode).toBe(200);
+    expect(db.query.mock.calls[0][1]).toEqual([1, 'mpesa-alert', null, 'Custom {{link}}']);
+  });
+});
+
+describe('launchDueCampaigns', () => {
+  afterEach(() => jest.clearAllMocks());
+
+  it('launches due campaigns and reverts failed ones to draft', async () => {
+    const { launchDueCampaigns } = require('../src/modules/campaigns/campaigns.routes');
+    const due = { id: 7, name: 'Due', type: 'sms', templateKey: 'mpesa-alert', status: 'scheduled', organizationId: 1 };
+    mockQueries([
+      ["status = 'scheduled'", () => ({ rows: [due] })],
+      ['FROM campaign_templates', () => ({ rows: [{ type: 'sms', body: 'Hi {{link}}' }] })],
+      ['FROM employees', () => ({ rows: [{ id: 10, phoneNumber: '+254700000000' }] })],
+      ['INSERT INTO simulation_attempts', () => ({ rows: [{ trackingToken: 'tok' }] })],
+    ]);
+    smsClient.sendSms.mockRejectedValue(new Error('no AT credentials'));
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    await launchDueCampaigns();
+
+    expect(smsClient.sendSms).toHaveBeenCalled();
+    expect(db.query).toHaveBeenCalledWith(expect.stringContaining("SET status = 'draft'"), [7]);
+  });
 });
 
 describe('POST /api/campaigns/webhook/gophish', () => {

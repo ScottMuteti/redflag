@@ -8,12 +8,18 @@ export function listTemplates() {
   return apiClient.get('/campaigns/templates').then((res) => res.data);
 }
 
+export function customizeTemplate(key, payload) {
+  return apiClient.put(`/campaigns/templates/${key}`, payload).then((res) => res.data);
+}
+
 export function createCampaign(payload) {
   return apiClient.post('/campaigns', payload).then((res) => res.data);
 }
 
 export function launchCampaign(id, departmentId) {
-  return apiClient.post(`/campaigns/${id}/launch`, departmentId ? { departmentId } : {}).then((res) => res.data);
+  return apiClient
+    .post(`/campaigns/${id}/launch`, departmentId ? { departmentId } : {})
+    .then((res) => res.data);
 }
 
 export function getCampaignResults(id) {

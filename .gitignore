@@ -36,6 +36,8 @@ venv/
 
 # ML artifacts
 ml-service/models/*.joblib
+ml-service/models/metadata.json
+ml-service/data/
 
 # Editor / OS
 .vscode/

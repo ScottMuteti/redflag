@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { listEmployees, listDepartments, createEmployee } from '../../api/employees';
+import { computeScore } from '../../api/scoring';
 
 const emptyForm = {
   fullName: '',
@@ -17,6 +18,7 @@ function EmployeeRoster() {
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [scores, setScores] = useState({});
 
   async function refresh() {
     const [emps, depts] = await Promise.all([listEmployees(), listDepartments()]);
@@ -44,6 +46,16 @@ function EmployeeRoster() {
     }
   }
 
+  async function handleComputeScore(employeeId) {
+    setError('');
+    try {
+      const result = await computeScore(employeeId);
+      setScores((prev) => ({ ...prev, [employeeId]: result }));
+    } catch (err) {
+      setError(err.response?.data?.message || 'Could not compute score');
+    }
+  }
+
   if (loading) return <p>Loading…</p>;
 
   return (
@@ -57,6 +69,7 @@ function EmployeeRoster() {
             <th>Department</th>
             <th>Title</th>
             <th>Hire date</th>
+            <th>Risk score</th>
           </tr>
         </thead>
         <tbody>
@@ -67,6 +80,15 @@ function EmployeeRoster() {
               <td>{emp.departmentName || '—'}</td>
               <td>{emp.jobTitle || '—'}</td>
               <td>{emp.hireDate ? emp.hireDate.slice(0, 10) : '—'}</td>
+              <td>
+                {scores[emp.id] ? (
+                  `${Math.round(scores[emp.id].score * 100)}% (${scores[emp.id].riskLevel})`
+                ) : (
+                  <button type="button" onClick={() => handleComputeScore(emp.id)}>
+                    Compute
+                  </button>
+                )}
+              </td>
             </tr>
           ))}
         </tbody>

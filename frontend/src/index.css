@@ -83,3 +83,95 @@ td {
   gap: 0.5rem;
   max-width: 640px;
 }
+
+.stat-cards {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.stat-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 1rem 1.25rem;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+  min-width: 180px;
+}
+
+.stat-label {
+  font-size: 0.8rem;
+  color: #52514e;
+}
+
+.stat-value {
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: #0b0b0b;
+}
+
+.stat-sub {
+  font-size: 0.8rem;
+  color: #898781;
+}
+
+.quiz-form fieldset {
+  border: 1px solid #dcdfe4;
+  border-radius: 6px;
+  margin-bottom: 0.75rem;
+  padding: 0.75rem;
+}
+
+.quiz-option {
+  display: block;
+  font-weight: normal;
+  margin-bottom: 0.25rem;
+}
+
+.assignment-list {
+  list-style: none;
+  padding: 0;
+}
+
+.assignment-list li {
+  background: #fff;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 0.75rem;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+}
+
+.template-preview {
+  max-width: 640px;
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid #e1e0d9;
+  border-radius: 6px;
+}
+
+.template-preview textarea,
+.template-preview input {
+  width: 100%;
+  margin-bottom: 0.5rem;
+  font: inherit;
+}
+
+.template-body {
+  padding: 0.5rem;
+  background: #f5f4f0;
+  border-radius: 4px;
+  white-space: pre-wrap;
+}
+
+.hint {
+  color: #6b6a65;
+  font-size: 0.85rem;
+}
+
+iframe.template-body {
+  width: 100%;
+  height: 200px;
+  border: 0;
+}
