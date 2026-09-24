@@ -1,12 +1,12 @@
 # RedFlag
 
 Simulates phishing/smishing attacks and predicts employee susceptibility with
-logistic regression. Final year project for Kenyan organizations.
+logistic regression for Kenyan organizations.
 
 ## Stack
 
 - Simulation engine: Node/Express, JWT + bcrypt auth, RBAC
-- Portal: React (Vite) — admin + employee portals
+- Portal: React — admin + employee portals
 - DB: PostgreSQL, 3NF, multi-tenant
 - Risk model: Python/scikit-learn logistic regression scoring service
 - Integrations: Gophish (email), Africa's Talking (SMS)
