@@ -24,7 +24,7 @@ vite.config.*.timestamp-*
 .env
 .env.*
 !.env.example
-!backend/.env.example
+!simulation-engine/.env.example
 
 # Python
 __pycache__/
@@ -35,9 +35,9 @@ venv/
 .pytest_cache/
 
 # ML artifacts
-ml-service/models/*.joblib
-ml-service/models/metadata.json
-ml-service/data/
+risk-model/models/*.joblib
+risk-model/models/metadata.json
+risk-model/data/
 
 # Editor / OS
 .vscode/

@@ -5,35 +5,39 @@ logistic regression. Final year project for Kenyan organizations.
 
 ## Stack
 
-- Backend: Node/Express, JWT + bcrypt auth, RBAC
-- Frontend: React (Vite) — admin + employee portals
+- Simulation engine: Node/Express, JWT + bcrypt auth, RBAC
+- Portal: React (Vite) — admin + employee portals
 - DB: PostgreSQL, 3NF, multi-tenant
-- ML: Python/scikit-learn logistic regression scoring service
+- Risk model: Python/scikit-learn logistic regression scoring service
 - Integrations: Gophish (email), Africa's Talking (SMS)
 
 ## Layout
 
 ```
-/backend      Express API
-/frontend     React app
-/ml-service   Python scoring microservice
+/simulation-engine   Express API (auth, campaigns, scoring, training, analytics)
+/portal              React admin + employee portals
+/risk-model          Python logistic regression scorer
 ```
 
 ## Run locally
 
-1. Create a `.env` (see `docker-compose.yml` / `backend/src/config/env.js`)
+1. Create a `.env` (see `docker-compose.yml` / `simulation-engine/src/config/env.js`)
 2. `docker compose up --build`
 
-Ports: Postgres `5432`, backend `4000`, ml-service `8000`, frontend `5173`.
+Ports: Postgres `5432`, simulation-engine `4000`, risk-model `8000`, portal `5173`.
 
-Or run each service on its own: `npm run dev` (backend/frontend) or
-`uvicorn app.api:app --reload` (ml-service, Python 3.11, after `pip install -r requirements.txt`).
+Or run each service on its own: `npm run dev` (simulation-engine/portal) or
+`uvicorn app.api:app --reload` (risk-model, Python 3.11, after `pip install -r requirements.txt`).
 
 ## ML model
 
-- Docker: trains on first start if `ml-service/models/latest.joblib` is missing
-- Manual: `python -m app.generate_sample_data && python -m app.train` (in `ml-service/`)
+- Docker: trains on first start if `risk-model/models/latest.joblib` is missing
+- Manual: `python -m app.generate_sample_data && python -m app.train` (in `risk-model/`)
 - Trained on synthetic data until real simulation history exists
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Status
 

@@ -3,11 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "workspaces": [
-    "backend",
-    "frontend"
+    "simulation-engine",
+    "portal"
   ],
   "scripts": {
-    "lint": "npm run lint --workspace=backend && npm run lint --workspace=frontend",
-    "test": "npm test --workspace=backend"
+    "lint": "npm run lint --workspace=simulation-engine && npm run lint --workspace=portal",
+    "test": "npm test --workspace=simulation-engine"
   }
 }
