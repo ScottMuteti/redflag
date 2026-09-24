@@ -12,10 +12,10 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./backend/src/db/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+      - ./simulation-engine/src/db/schema.sql:/docker-entrypoint-initdb.d/schema.sql
 
-  backend:
-    build: ./backend
+  simulation-engine:
+    build: ./simulation-engine
     restart: unless-stopped
     env_file: .env
     ports:
@@ -23,16 +23,16 @@ services:
     depends_on:
       - postgres
     volumes:
-      - ./backend:/app
+      - ./simulation-engine:/app
       - /app/node_modules
 
-  ml-service:
-    build: ./ml-service
+  risk-model:
+    build: ./risk-model
     restart: unless-stopped
     ports:
       - "8000:8000"
     volumes:
-      - ./ml-service:/app
+      - ./risk-model:/app
 
   # Official pre-built image — the vendored ./gophish directory ships only
   # static assets/migrations/config, not buildable Go source.
@@ -45,13 +45,13 @@ services:
     volumes:
       - ./docker/gophish/config.json:/opt/gophish/config.json
 
-  frontend:
-    build: ./frontend
+  portal:
+    build: ./portal
     restart: unless-stopped
     ports:
       - "5173:80"
     depends_on:
-      - backend
+      - simulation-engine
 
 volumes:
   postgres_data:

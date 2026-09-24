@@ -1,5 +1,5 @@
 {
-  "name": "@redflag/backend",
+  "name": "@redflag/simulation-engine",
   "version": "0.1.0",
   "private": true,
   "engines": {
