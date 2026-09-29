@@ -4,6 +4,10 @@ export function listCampaigns() {
   return apiClient.get('/campaigns').then((res) => res.data);
 }
 
+export function getCampaign(id) {
+  return apiClient.get(`/campaigns/${id}`).then((res) => res.data);
+}
+
 export function listTemplates() {
   return apiClient.get('/campaigns/templates').then((res) => res.data);
 }

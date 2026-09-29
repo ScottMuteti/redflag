@@ -6,9 +6,25 @@ const USER_KEY = 'redflag_user';
 
 const AuthContext = createContext(null);
 
+// True when the stored JWT is missing, unreadable or past its expiry.
+function tokenExpired(token) {
+  try {
+    const { exp } = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return !exp || exp * 1000 <= Date.now();
+  } catch {
+    return true;
+  }
+}
+
 function readStoredUser() {
   const raw = localStorage.getItem(USER_KEY);
-  return raw ? JSON.parse(raw) : null;
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (!raw || !token || tokenExpired(token)) {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(USER_KEY);
+    return null;
+  }
+  return JSON.parse(raw);
 }
 
 // eslint-disable-next-line react/prop-types

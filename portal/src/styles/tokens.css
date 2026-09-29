@@ -1,0 +1,59 @@
+/* Design tokens. The ONLY place colour literals live; Tailwind's theme maps onto these. */
+
+:root {
+  /* Brand (dark red + white) */
+  --brand-900: #4a0d0d;
+  --brand-800: #650f0f;
+  --brand-700: #7f1414;
+  --brand-600: #9b1c1c;
+  --brand-500: #b42525;
+  --brand-100: #f7e1e1;
+  --brand-50: #fcf3f3;
+  --white: #ffffff;
+
+  /* Surfaces */
+  --bg-page: #f7f6f6;
+  --bg-card: #ffffff;
+  --bg-search: #f3f0f0;
+  --bg-sidebar: #1f0a0a;
+  --sidebar-item-active: #7f1414;
+  --sidebar-hover: rgba(255, 255, 255, 0.06);
+  --sidebar-divider: rgba(255, 255, 255, 0.08);
+  --sidebar-text: #b9a9a9;
+  --sidebar-text-active: #ffffff;
+  --sidebar-label: #968282; /* spec #7a6666, lifted to pass AA on --bg-sidebar */
+  --border: #eee9e9;
+
+  /* Text */
+  --text-primary: #1a1414;
+  --text-secondary: #6b6363;
+  --text-muted: #756c6c; /* spec #a09898, darkened to pass AA on white */
+
+  /* Semantic — brand red is never used to mean "error" */
+  /* Text shades below are the spec's hues darkened just enough to pass AA on their tints. */
+  --success: #17703d; /* spec #1f8a4c */
+  --success-bg: #e3f4ea;
+  --warning: #8a5a14; /* spec #b7791f */
+  --warning-bg: #fbf0dc;
+  --danger: #c2352f; /* spec #e5484d; still more orange than brand */
+  --danger-strong: #e5484d; /* icons, dots, chart marks */
+  --danger-bg: #fde8e8;
+  --info-bg: #f1efef;
+  --chart-accent: #e9a23b;
+  --tooltip-dark: #1f0a0a;
+
+  /* Charts */
+  --chart-fill-opacity: 0.15;
+  --overlay: rgba(31, 10, 10, 0.45);
+  --white-a10: rgba(255, 255, 255, 0.1);
+  --white-a16: rgba(255, 255, 255, 0.16);
+  --white-a30: rgba(255, 255, 255, 0.3);
+  --white-a70: rgba(255, 255, 255, 0.7);
+
+  /* Depth */
+  --elev-card: 0 1px 2px rgba(31, 10, 10, 0.04);
+  --elev-hover: 0 6px 18px rgba(31, 10, 10, 0.08);
+  --elev-pop: 0 12px 32px rgba(31, 10, 10, 0.16);
+  --elev-brand: 0 30px 60px -20px rgba(127, 20, 20, 0.35);
+  --drop-soft: drop-shadow(0 2px 4px rgba(31, 10, 10, 0.14));
+}

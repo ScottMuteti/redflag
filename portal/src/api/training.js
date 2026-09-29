@@ -17,3 +17,7 @@ export function listModules() {
 export function createModule(payload) {
   return apiClient.post('/training/modules', payload).then((res) => res.data);
 }
+
+export function assignTraining(payload) {
+  return apiClient.post('/training/assign', payload).then((res) => res.data);
+}
