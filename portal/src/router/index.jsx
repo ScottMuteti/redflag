@@ -1,10 +1,17 @@
+import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import AdminApp from '../portals/admin/AdminApp';
-import EmployeeApp from '../portals/employee/EmployeeApp';
+import { useAuth } from '../context/AuthContext';
+import AppShell from '../components/shell/AppShell';
+import { PageSkeleton } from '../components/shell/PageSkeleton';
+import ProtectedRoute from './ProtectedRoute';
 import LoginPage from '../pages/LoginPage';
 import RegisterOrgPage from '../pages/RegisterOrgPage';
-import ProtectedRoute from './ProtectedRoute';
-import { useAuth } from '../context/AuthContext';
+import StatusPage from '../pages/StatusPage';
+
+const AnalyticsDashboard = lazy(() => import('../portals/admin/AnalyticsDashboard'));
+const EmployeeRoster = lazy(() => import('../portals/admin/EmployeeRoster'));
+const CampaignsPage = lazy(() => import('../portals/admin/CampaignsPage'));
+const EmployeeApp = lazy(() => import('../portals/employee/EmployeeApp'));
 
 function HomeRedirect() {
   const { user } = useAuth();
@@ -14,28 +21,34 @@ function HomeRedirect() {
 
 function AppRouter() {
   return (
-    <Routes>
-      <Route path="/" element={<HomeRedirect />} />
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/register" element={<RegisterOrgPage />} />
-      <Route
-        path="/admin/*"
-        element={
-          <ProtectedRoute role="admin">
-            <AdminApp />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/portal/*"
-        element={
-          <ProtectedRoute role="employee">
-            <EmployeeApp />
-          </ProtectedRoute>
-        }
-      />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <Suspense fallback={<PageSkeleton />}>
+      <Routes>
+        <Route path="/" element={<HomeRedirect />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterOrgPage />} />
+        <Route
+          path="/admin"
+          element={
+            <ProtectedRoute role="admin">
+              <AppShell />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<AnalyticsDashboard />} />
+          <Route path="employees" element={<EmployeeRoster />} />
+          <Route path="campaigns" element={<CampaignsPage />} />
+        </Route>
+        <Route
+          path="/portal/*"
+          element={
+            <ProtectedRoute role="employee">
+              <EmployeeApp />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="*" element={<StatusPage code={404} />} />
+      </Routes>
+    </Suspense>
   );
 }
 
