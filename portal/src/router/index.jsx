@@ -4,8 +4,9 @@ import { useAuth } from '../context/AuthContext';
 import AppShell from '../components/shell/AppShell';
 import { PageSkeleton } from '../components/shell/PageSkeleton';
 import ProtectedRoute from './ProtectedRoute';
-import LoginPage from '../pages/LoginPage';
-import RegisterOrgPage from '../pages/RegisterOrgPage';
+import LoginPage from '../pages/auth/LoginPage';
+import RegisterPage from '../pages/auth/RegisterPage';
+import ForgotPasswordPage from '../pages/auth/ForgotPasswordPage';
 import StatusPage from '../pages/StatusPage';
 
 const AnalyticsDashboard = lazy(() => import('../portals/admin/AnalyticsDashboard'));
@@ -25,7 +26,8 @@ function AppRouter() {
       <Routes>
         <Route path="/" element={<HomeRedirect />} />
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterOrgPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route
           path="/admin"
           element={
