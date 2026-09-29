@@ -11,7 +11,7 @@ import LandingPage from '../pages/landing/LandingPage';
 
 const OverviewPage = lazy(() => import('../pages/admin/OverviewPage'));
 const EmployeeRoster = lazy(() => import('../portals/admin/EmployeeRoster'));
-const CampaignsPage = lazy(() => import('../portals/admin/CampaignsPage'));
+const CampaignsPage = lazy(() => import('../pages/admin/CampaignsPage'));
 const EmployeeApp = lazy(() => import('../portals/employee/EmployeeApp'));
 
 function AppRouter() {
