@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { BookOpen, CircleCheck, LogOut } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { listAssignments, submitQuiz } from '../../api/training';
 import { getEmployeeScore } from '../../api/scoring';
-import { Card, Empty, Icon, Loading, Logo, RiskBadge, StatusBadge } from '../../components/ui';
+import { Card, Empty, Loading, RiskBadge, StatusBadge } from '../../components/legacy';
+import AppShell from '../../components/dashboard/AppShell';
+import StatCard from '../../components/dashboard/StatCard';
+import TopBar from '../../components/dashboard/TopBar';
 
 /* eslint-disable react/prop-types -- assignment/onSubmitted are plain local props, not worth a PropTypes dependency */
 function QuizForm({ assignment, onSubmitted }) {
@@ -94,59 +98,69 @@ function EmployeeApp() {
   }
 
   const pending = assignments.filter((a) => a.status !== 'completed').length;
+  const completed = assignments.length - pending;
   const firstName = (user?.fullName || '').split(' ')[0];
 
   return (
-    <div>
-      <header className="topbar">
-        <Logo />
-        <div className="topbar-user">
-          <span>{user?.email}</span>
-          <button type="button" className="btn-sm" onClick={handleLogout}>
-            <Icon name="logout" size={16} />
-            Log out
-          </button>
-        </div>
-      </header>
-
+    <AppShell
+      topBar={
+        <TopBar
+          name={firstName || 'there'}
+          subtitle="Your security training and risk score"
+          actions={
+            <button type="button" className="btn-sm" onClick={handleLogout}>
+              <LogOut size={16} strokeWidth={1.75} />
+              Log out
+            </button>
+          }
+        />
+      }
+    >
       {loading ? (
         <Loading />
       ) : (
-        <main className="portal-content stack">
-          <div className="hero">
-            <div>
-              <h1>{firstName ? `Hi ${firstName},` : 'Welcome'}</h1>
-              <p>
-                {pending > 0
-                  ? `You have ${pending} training ${pending === 1 ? 'module' : 'modules'} to complete.`
-                  : 'You are all caught up on training.'}
-              </p>
-            </div>
-            <div className="hero-score">
-              <span className="stat-label" style={{ color: 'var(--ink-text)' }}>
-                Your risk score
-              </span>
-              <div className="stat-value">{score ? `${Math.round(score.score * 100)}%` : '—'}</div>
-              {score && <RiskBadge level={score.riskLevel} />}
-            </div>
+        <div className="stack">
+          <div className="d-grid-3">
+            <StatCard
+              variant="highlight"
+              label="Your risk score"
+              value={score ? Math.round(score.score * 100) : '—'}
+              suffix={score ? '/100' : null}
+              index={0}
+            />
+            <StatCard
+              variant="sparkline"
+              label="Modules to complete"
+              value={pending}
+              icon={BookOpen}
+              index={1}
+            />
+            <StatCard
+              variant="icon"
+              label="Modules completed"
+              value={completed}
+              icon={CircleCheck}
+              index={2}
+            />
           </div>
 
           <Card
             title="Your training"
             subtitle="Assigned after simulated attacks. Pass the quiz to complete each module."
+            actions={score && <RiskBadge level={score.riskLevel} />}
           >
             {assignments.length === 0 ? (
               <Empty title="No training assigned">Nice work — nothing to do right now.</Empty>
             ) : (
               <div className="stack">
                 {assignments.map((assignment) => (
-                  <div key={assignment.id} className="card assignment">
+                  <div key={assignment.id} className="assignment">
                     <div className="assignment-head">
                       <div>
                         <h3>{assignment.title}</h3>
                         {assignment.description && <p>{assignment.description}</p>}
                       </div>
-                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                      <div className="assignment-actions">
                         <StatusBadge status={assignment.status} />
                         {assignment.status !== 'completed' && (
                           <button
@@ -180,9 +194,9 @@ function EmployeeApp() {
               </div>
             )}
           </Card>
-        </main>
+        </div>
       )}
-    </div>
+    </AppShell>
   );
 }
 

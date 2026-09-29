@@ -1,15 +1,35 @@
-import { Routes, Route, NavLink, useNavigate } from 'react-router-dom';
+import { Routes, Route, useNavigate } from 'react-router-dom';
+import {
+  CalendarDays,
+  ChartColumn,
+  LayoutGrid,
+  LayoutTemplate,
+  Megaphone,
+  Settings,
+  Users,
+} from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { Icon, Logo } from '../../components/ui';
+import AppShell from '../../components/dashboard/AppShell';
+import Sidebar from '../../components/dashboard/Sidebar';
+import TopBar from '../../components/dashboard/TopBar';
+import { initialsOf } from '../../lib/format';
+import { unreadMessages } from '../../mocks/dashboard';
 import EmployeeRoster from './EmployeeRoster';
 import CampaignsPage from './CampaignsPage';
 import AnalyticsDashboard from './AnalyticsDashboard';
 
+// Analytics, Templates and Calendar have no page of their own yet, so they
+// jump to the page that holds that content without showing as selected.
 const NAV = [
-  { to: '/admin', label: 'Dashboard', icon: 'dashboard', end: true },
-  { to: '/admin/employees', label: 'Employees', icon: 'employees' },
-  { to: '/admin/campaigns', label: 'Campaigns', icon: 'campaigns' },
+  { to: '/admin', label: 'Dashboard', icon: LayoutGrid, end: true },
+  { to: '/admin/campaigns', label: 'Campaigns', icon: Megaphone },
+  { to: '/admin', label: 'Analytics', icon: ChartColumn, active: false },
+  { to: '/admin/campaigns', label: 'Templates', icon: LayoutTemplate, active: false },
+  { to: '/admin/employees', label: 'Employees', icon: Users },
+  { to: '/admin/campaigns', label: 'Calendar', icon: CalendarDays, active: false },
 ];
+
+const FOOTER_NAV = [{ label: 'Settings (coming soon)', icon: Settings }];
 
 function AdminApp() {
   const { user, logout } = useAuth();
@@ -20,44 +40,33 @@ function AdminApp() {
     navigate('/login');
   }
 
-  const name = user?.fullName || user?.email || '';
+  const fullName = user?.fullName || 'Admin';
 
   return (
-    <div className="shell">
-      <aside className="sidebar">
-        <Logo light />
-        <nav>
-          {NAV.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.end}
-              className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
-            >
-              <Icon name={item.icon} />
-              <span>{item.label}</span>
-            </NavLink>
-          ))}
-        </nav>
-        <div className="sidebar-user">
-          <span className="avatar">{name.charAt(0).toUpperCase()}</span>
-          <div className="who">
-            <strong>{user?.fullName || 'Admin'}</strong>
-            <span>{user?.email}</span>
-          </div>
-          <button type="button" onClick={handleLogout} title="Log out" aria-label="Log out">
-            <Icon name="logout" />
-          </button>
-        </div>
-      </aside>
-      <main className="content">
-        <Routes>
-          <Route path="/" element={<AnalyticsDashboard />} />
-          <Route path="/employees" element={<EmployeeRoster />} />
-          <Route path="/campaigns" element={<CampaignsPage />} />
-        </Routes>
-      </main>
-    </div>
+    <AppShell
+      topBar={
+        <TopBar
+          name={fullName.split(' ')[0]}
+          subtitle="Track your organisation's human security posture"
+          hasMessages={unreadMessages > 0}
+        />
+      }
+      sidebar={
+        <Sidebar
+          items={NAV}
+          footerItems={FOOTER_NAV}
+          initials={initialsOf(fullName)}
+          userLabel={user?.email}
+          onLogout={handleLogout}
+        />
+      }
+    >
+      <Routes>
+        <Route path="/" element={<AnalyticsDashboard />} />
+        <Route path="/employees" element={<EmployeeRoster />} />
+        <Route path="/campaigns" element={<CampaignsPage />} />
+      </Routes>
+    </AppShell>
   );
 }
 

@@ -1,5 +1,5 @@
 /* eslint-disable react/prop-types -- layout wrapper */
-import { Logo } from '../components/ui';
+import { Logo } from '../components/legacy';
 
 function AuthLayout({ children }) {
   return (

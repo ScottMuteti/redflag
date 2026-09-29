@@ -49,6 +49,13 @@
 
   --font-sans: 'Plus Jakarta Sans Variable', system-ui, sans-serif;
 
+  --text-micro: 11px;
+  --text-body: 13px;
+  --text-card: 14px;
+  --text-page: 18px;
+  --text-greet: 20px;
+  --text-stat: 28px;
+
   --radius-card: 12px;
   --radius-control: 8px;
   --radius-search: 10px;

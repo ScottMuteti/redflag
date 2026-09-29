@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { listEmployees, listDepartments, createEmployee } from '../../api/employees';
 import { computeScore } from '../../api/scoring';
-import { Card, Empty, Field, Loading, PageHeader, RiskBadge } from '../../components/ui';
+import { Card, Empty, Field, Loading, PageHeader, RiskBadge } from '../../components/legacy';
 
 const emptyForm = {
   fullName: '',

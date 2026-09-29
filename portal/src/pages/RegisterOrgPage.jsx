@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Field } from '../components/ui';
+import { Field } from '../components/legacy';
 import AuthLayout from './AuthLayout';
 
 const initialForm = {
@@ -11,6 +11,7 @@ const initialForm = {
   adminFullName: '',
   adminEmail: '',
   adminPassword: '',
+  confirmPassword: '',
 };
 
 function RegisterOrgPage() {
@@ -27,9 +28,15 @@ function RegisterOrgPage() {
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
+    if (form.adminPassword !== form.confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
     setSubmitting(true);
     try {
-      await registerOrganization(form);
+      // eslint-disable-next-line no-unused-vars -- confirmPassword is client-side only
+      const { confirmPassword, ...payload } = form;
+      await registerOrganization(payload);
       navigate('/admin');
     } catch (err) {
       setError(err.response?.data?.message || 'Registration failed');
@@ -92,6 +99,16 @@ function RegisterOrgPage() {
               name="adminPassword"
               type="password"
               value={form.adminPassword}
+              onChange={handleChange}
+              required
+              minLength={8}
+            />
+          </Field>
+          <Field label="Confirm password" wide>
+            <input
+              name="confirmPassword"
+              type="password"
+              value={form.confirmPassword}
               onChange={handleChange}
               required
               minLength={8}

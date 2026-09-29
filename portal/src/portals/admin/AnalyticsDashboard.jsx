@@ -1,246 +1,286 @@
-import { useEffect, useState } from 'react';
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  LabelList,
-  Legend,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
+import { useEffect, useMemo, useState } from 'react';
+import { ShieldCheck, Users } from 'lucide-react';
 import { getOrganizationAnalytics } from '../../api/analytics';
-import { Card, Empty, Loading, PageHeader, RiskBadge } from '../../components/ui';
+import { listCampaigns, listTemplates } from '../../api/campaigns';
+import { listDepartments, listEmployees } from '../../api/employees';
+import { useAuth } from '../../context/AuthContext';
+import { Loading } from '../../components/legacy';
+import StatCard from '../../components/dashboard/StatCard';
+import TrendCard from '../../components/dashboard/TrendCard';
+import GaugeCard from '../../components/dashboard/GaugeCard';
+import ProfileCard from '../../components/dashboard/ProfileCard';
+import TemplateStackCard from '../../components/dashboard/TemplateStackCard';
+import EventListCard from '../../components/dashboard/EventListCard';
+import SecurityCard from '../../components/dashboard/SecurityCard';
+import { formatNumber, formatPercent } from '../../lib/format';
+import { fallbackTemplates, recentEvents, trainingDeltaVsLastMonth } from '../../mocks/dashboard';
 
-const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+const DAY = 24 * 60 * 60 * 1000;
+const WEEKS_SHOWN = 7;
 
-const asPercent = (value) =>
-  value === null || value === undefined ? '—' : `${Math.round(value * 100)}%`;
+function startOfWeek(date) {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); // Monday
+  return d;
+}
 
-// Categorical slots 1–2 of the dataviz reference palette (validated for CVD separation).
-const TREND_SERIES = [
-  { key: 'avgRisk', name: 'Avg risk score', color: '#2a78d6' },
-  { key: 'clickRate', name: 'Click rate', color: '#eb6834' },
-];
+// Index 0 = oldest week, last = current week.
+function weekIndex(date, now) {
+  const weeksAgo = Math.round((startOfWeek(now) - startOfWeek(date)) / (7 * DAY));
+  return WEEKS_SHOWN - 1 - weeksAgo;
+}
 
-const axisTick = { fill: '#898781', fontSize: 12 };
+function campaignsPerWeek(campaigns, now) {
+  const counts = new Array(WEEKS_SHOWN).fill(0);
+  campaigns.forEach((c) => {
+    const i = weekIndex(c.createdAt, now);
+    if (i >= 0 && i < WEEKS_SHOWN) counts[i] += 1;
+  });
+  return counts;
+}
 
-/* eslint-disable react/prop-types -- recharts label props */
-function EndLabel({ x, y, index, value, name, lastIndex, dy }) {
-  if (index !== lastIndex || value === null || value === undefined) return null;
+// Running headcount at the end of each week.
+function headcountPerWeek(employees, now) {
+  const weekEnds = Array.from(
+    { length: WEEKS_SHOWN },
+    (_, i) => new Date(startOfWeek(now).getTime() - (WEEKS_SHOWN - 2 - i) * 7 * DAY),
+  );
+  return weekEnds.map((end) => employees.filter((e) => new Date(e.createdAt) < end).length);
+}
+
+const rate = (part, whole) => (whole > 0 ? part / whole : null);
+
+// Latest campaign vs all earlier ones, in percentage points.
+function reportRateDelta(campaigns) {
+  const sent = campaigns.filter((c) => c.totalAttempts > 0);
+  if (sent.length < 2) return null;
+  const [latest, ...earlier] = sent;
+  const earlierTotals = earlier.reduce(
+    (acc, c) => ({ sent: acc.sent + c.totalAttempts, reported: acc.reported + c.reported }),
+    { sent: 0, reported: 0 },
+  );
   return (
-    <text x={x + 8} y={y + 4 + dy} fill="#52514e" fontSize={12}>
-      {name} {asPercent(value)}
-    </text>
+    (rate(latest.reported, latest.totalAttempts) -
+      rate(earlierTotals.reported, earlierTotals.sent)) *
+    100
   );
 }
-/* eslint-enable react/prop-types */
+
+const weekLabel = (iso) =>
+  `Week of ${new Date(iso).toLocaleDateString('en-KE', { day: 'numeric', month: 'short' })}`;
+const monthLabel = (key) =>
+  new Date(`${key}-01`).toLocaleDateString('en-KE', { month: 'short', year: 'numeric' });
+
+function vulnerabilitySeries(trend, period) {
+  const weekly = trend
+    .filter((t) => t.avgRisk !== null)
+    .map((t) => ({ key: t.week, value: t.avgRisk * 100 }));
+  if (period === 'weekly') return weekly.map((p) => ({ label: weekLabel(p.key), value: p.value }));
+
+  const byMonth = new Map();
+  weekly.forEach((p) => {
+    const month = p.key.slice(0, 7);
+    byMonth.set(month, [...(byMonth.get(month) || []), p.value]);
+  });
+  return [...byMonth.entries()].map(([month, values]) => ({
+    label: monthLabel(month),
+    value: values.reduce((a, b) => a + b, 0) / values.length,
+  }));
+}
+
+// Show the three Kenyan headline scenarios when the org has them, back to front.
+const PREFERRED = [/safaricom/i, /kra/i, /m-?pesa/i];
+
+function pickTemplates(templates) {
+  if (templates.length === 0) return fallbackTemplates;
+  const picked = PREFERRED.map((re) => templates.find((t) => re.test(t.name))).filter(Boolean);
+  templates.forEach((t) => {
+    if (picked.length < 3 && !picked.includes(t)) picked.unshift(t);
+  });
+  return picked
+    .slice(-3)
+    .map((t) => ({ ...t, category: CATEGORY_LABELS[t.category] || t.category }));
+}
+
+const CATEGORY_LABELS = {
+  mpesa: 'Mobile money',
+  kra: 'Tax compliance',
+  safaricom: 'Telco support',
+  invoice: 'Invoice fraud',
+};
+
+const PERIODS = [
+  { value: 'monthly', label: 'Monthly' },
+  { value: 'weekly', label: 'Weekly' },
+];
 
 function AnalyticsDashboard() {
+  const { user } = useAuth();
   const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [period, setPeriod] = useState('weekly');
 
   useEffect(() => {
-    getOrganizationAnalytics()
-      .then(setData)
-      .finally(() => setLoading(false));
+    const valueOr = (result, fallback) => (result.status === 'fulfilled' ? result.value : fallback);
+    Promise.allSettled([
+      getOrganizationAnalytics(),
+      listCampaigns(),
+      listEmployees(),
+      listDepartments(),
+      listTemplates(),
+    ]).then(([analytics, campaigns, employees, departments, templates]) =>
+      setData({
+        analytics: valueOr(analytics, null),
+        campaigns: valueOr(campaigns, []),
+        employees: valueOr(employees, []),
+        departments: valueOr(departments, []),
+        templates: valueOr(templates, []),
+      }),
+    );
   }, []);
 
-  if (loading) return <Loading />;
-  if (!data) return <Empty title="No analytics available yet" />;
-
-  const totals = data.campaigns.reduce(
-    (acc, c) => ({ sent: acc.sent + c.totalAttempts, clicked: acc.clicked + c.clicked }),
-    { sent: 0, clicked: 0 },
+  const trendData = useMemo(
+    () => (data?.analytics ? vulnerabilitySeries(data.analytics.trend, period) : []),
+    [data, period],
   );
-  const scoredEmployees = data.departments.reduce((sum, d) => sum + d.employeeCount, 0);
 
-  // Spread the two end labels apart when the lines finish close together.
-  const last = data.trend[data.trend.length - 1] || {};
-  const endsClose =
-    last.avgRisk !== null &&
-    last.clickRate !== null &&
-    Math.abs(last.avgRisk - last.clickRate) < 0.1;
-  const labelOffset = (i) => (endsClose ? (i === 0 ? -8 : 8) : 0);
+  if (!data) return <Loading />;
+
+  const now = new Date();
+  const { analytics, campaigns, employees, departments, templates } = data;
+  const funnel = analytics?.campaigns || [];
+  const trend = analytics?.trend || [];
+  const training = analytics?.training || { totalAssignments: 0, completedAssignments: 0 };
+
+  const campaignsThisMonth = campaigns.filter((c) => {
+    const d = new Date(c.createdAt);
+    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+  }).length;
+
+  const totals = funnel.reduce(
+    (acc, c) => ({
+      sent: acc.sent + c.totalAttempts,
+      clicked: acc.clicked + c.clicked,
+      reported: acc.reported + c.reported,
+    }),
+    { sent: 0, clicked: 0, reported: 0 },
+  );
+  const reportRate = rate(totals.reported, totals.sent);
+
+  const clickSeries = trend.filter((t) => t.clickRate !== null).map((t) => t.clickRate);
+  const lastClick = clickSeries.at(-1) ?? rate(totals.clicked, totals.sent);
+  const clickDelta =
+    clickSeries.length >= 2 ? (clickSeries.at(-1) - clickSeries.at(-2)) * 100 : null;
+
+  const riskSeries = trend.filter((t) => t.avgRisk !== null).map((t) => t.avgRisk * 100);
+  const riskScore = analytics?.riskScore;
+
+  const improving = trendData.length >= 2 && trendData.at(-1).value < trendData[0].value;
+  const status =
+    trendData.length >= 2
+      ? improving
+        ? { tone: 'good', label: 'On track' }
+        : { tone: 'warn', label: 'Needs attention' }
+      : null;
+
+  const completionRatio = rate(training.completedAssignments, training.totalAssignments);
 
   return (
-    <div className="stack">
-      <PageHeader title="Dashboard" subtitle="Your organization's security posture at a glance." />
+    <div className="d-grid">
+      <StatCard
+        variant="bars"
+        label="Campaigns this month"
+        value={formatNumber(campaignsThisMonth)}
+        series={campaignsPerWeek(campaigns, now)}
+        highlightIndex={WEEKS_SHOWN - 1}
+        index={0}
+      />
+      <StatCard
+        variant="sparkline"
+        label="Employees enrolled"
+        value={formatNumber(employees.length)}
+        icon={Users}
+        series={headcountPerWeek(employees, now)}
+        index={1}
+      />
+      <StatCard
+        variant="icon"
+        label="Report rate"
+        value={formatPercent(reportRate)}
+        icon={ShieldCheck}
+        index={2}
+      />
+      <StatCard
+        variant="highlight"
+        label="Org risk score"
+        value={riskScore === null || riskScore === undefined ? '—' : Math.round(riskScore * 100)}
+        suffix={riskScore === null || riskScore === undefined ? null : '/100'}
+        series={riskSeries}
+        index={3}
+      />
 
-      <div className="stat-cards">
-        <div className="stat-card">
-          <span className="stat-label">Org risk score (weighted)</span>
-          <span className="stat-value">{asPercent(data.riskScore)}</span>
-          <span>
-            <RiskBadge level={data.riskLevel} />
-          </span>
-        </div>
-        <div className="stat-card">
-          <span className="stat-label">Employees scored</span>
-          <span className="stat-value">{scoredEmployees}</span>
-          <span className="stat-sub">across {plural(data.departments.length, 'department')}</span>
-        </div>
-        <div className="stat-card">
-          <span className="stat-label">Overall click rate</span>
-          <span className="stat-value">
-            {totals.sent ? asPercent(totals.clicked / totals.sent) : '—'}
-          </span>
-          <span className="stat-sub">
-            {plural(totals.clicked, 'click')} from {plural(data.campaigns.length, 'campaign')}
-          </span>
-        </div>
-        <div className="stat-card">
-          <span className="stat-label">Training completion</span>
-          <span className="stat-value">{asPercent(data.training.completionRate)}</span>
-          <span className="stat-sub">
-            {data.training.completedAssignments}/{data.training.totalAssignments} assignments
-          </span>
-        </div>
-      </div>
+      <TrendCard
+        title="Vulnerability trend"
+        status={status}
+        periods={PERIODS}
+        period={period}
+        onPeriodChange={setPeriod}
+        floats={[
+          {
+            label: 'Click rate',
+            value: formatPercent(lastClick),
+            delta: clickDelta,
+            invertGood: true,
+          },
+          {
+            label: 'Report rate',
+            value: formatPercent(reportRate),
+            delta: reportRateDelta(funnel),
+          },
+        ]}
+        data={trendData}
+        formatValue={(v) => `${Math.round(v)}/100`}
+        emptyText="The trend appears after risk scores are computed in two or more periods."
+        index={4}
+      />
+      <GaugeCard
+        title="Training completion"
+        label="Assigned modules"
+        value={`${formatNumber(training.completedAssignments)}/${formatNumber(training.totalAssignments)}`}
+        caption={`Completion is ${trainingDeltaVsLastMonth}% higher than last month`}
+        ratio={completionRatio}
+        index={5}
+      />
+      <ProfileCard
+        name={user?.fullName || 'Admin'}
+        email={user?.email}
+        stats={[
+          { label: 'Campaigns', value: campaigns.length },
+          { label: 'Employees', value: employees.length },
+          { label: 'Departments', value: departments.length },
+        ]}
+        index={6}
+      />
 
-      <Card title="Trend by week" subtitle="Average risk score and click rate over time.">
-        {data.trend.length === 0 ? (
-          <Empty title="No history yet">
-            Trends appear once scores are computed and campaigns sent.
-          </Empty>
-        ) : (
-          <ResponsiveContainer width="100%" height={260}>
-            <LineChart data={data.trend} margin={{ top: 16, right: 150, left: 0, bottom: 0 }}>
-              <CartesianGrid stroke="#e1e0d9" vertical={false} />
-              <XAxis
-                dataKey="week"
-                tick={axisTick}
-                axisLine={{ stroke: '#c3c2b7' }}
-                tickLine={false}
-              />
-              <YAxis
-                domain={[0, 1]}
-                tickFormatter={asPercent}
-                tick={axisTick}
-                axisLine={false}
-                tickLine={false}
-                width={44}
-              />
-              <Tooltip
-                formatter={(value) => asPercent(value)}
-                labelFormatter={(week) => `Week of ${week}`}
-                contentStyle={{ fontSize: 13 }}
-                cursor={{ stroke: '#c3c2b7', strokeWidth: 1 }}
-              />
-              <Legend
-                verticalAlign="top"
-                align="left"
-                height={28}
-                iconType="plainline"
-                formatter={(name) => <span style={{ color: '#52514e' }}>{name}</span>}
-                wrapperStyle={{ fontSize: 12 }}
-              />
-              {TREND_SERIES.map((series, i) => (
-                <Line
-                  key={series.key}
-                  dataKey={series.key}
-                  name={series.name}
-                  stroke={series.color}
-                  strokeWidth={2}
-                  dot={{ r: 4, strokeWidth: 2, fill: '#fcfcfb' }}
-                  activeDot={{ r: 5 }}
-                  connectNulls
-                  isAnimationActive={false}
-                >
-                  <LabelList
-                    dataKey={series.key}
-                    content={(props) => (
-                      <EndLabel
-                        {...props}
-                        name={series.name}
-                        lastIndex={data.trend.length - 1}
-                        dy={labelOffset(i)}
-                      />
-                    )}
-                  />
-                </Line>
-              ))}
-            </LineChart>
-          </ResponsiveContainer>
-        )}
-      </Card>
-
-      <Card title="Risk by department" subtitle="Average latest risk score per department.">
-        {data.departments.length === 0 ? (
-          <Empty title="No scored employees yet">
-            Compute scores from the Employees page first.
-          </Empty>
-        ) : (
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={data.departments} margin={{ top: 24, right: 8, left: 0, bottom: 0 }}>
-              <CartesianGrid stroke="#e1e0d9" vertical={false} />
-              <XAxis
-                dataKey="department"
-                tick={axisTick}
-                axisLine={{ stroke: '#c3c2b7' }}
-                tickLine={false}
-              />
-              <YAxis
-                domain={[0, 1]}
-                tickFormatter={asPercent}
-                tick={axisTick}
-                axisLine={false}
-                tickLine={false}
-                width={44}
-              />
-              <Tooltip
-                formatter={(value) => asPercent(value)}
-                contentStyle={{ fontSize: 13 }}
-                cursor={{ fill: 'rgba(11, 11, 11, 0.04)' }}
-              />
-              <Bar dataKey="avgScore" fill="#2a78d6" radius={[4, 4, 0, 0]} maxBarSize={56}>
-                <LabelList
-                  dataKey="avgScore"
-                  position="top"
-                  formatter={asPercent}
-                  style={{ fill: '#52514e', fontSize: 12 }}
-                />
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        )}
-      </Card>
-
-      <Card title="Campaign funnel" className="card-flush">
-        {data.campaigns.length === 0 ? (
-          <Empty title="No campaigns yet" />
-        ) : (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Campaign</th>
-                  <th className="num">Targeted</th>
-                  <th className="num">Opened</th>
-                  <th className="num">Clicked</th>
-                  <th className="num">Submitted</th>
-                  <th className="num">Reported</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.campaigns.map((c) => (
-                  <tr key={c.id}>
-                    <td className="cell-main">{c.name}</td>
-                    <td className="num">{c.totalAttempts}</td>
-                    <td className="num">{c.opened}</td>
-                    <td className="num">{c.clicked}</td>
-                    <td className="num">{c.submitted}</td>
-                    <td className="num">{c.reported}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Card>
+      <TemplateStackCard
+        title="Simulation Templates"
+        description="M-Pesa, Safaricom, KRA and invoice-fraud scenarios ready to launch."
+        action={{ label: 'New Campaign', to: '/admin/campaigns' }}
+        templates={pickTemplates(templates)}
+        index={7}
+      />
+      <EventListCard
+        title="Recent Events"
+        events={recentEvents}
+        emptyText="No simulation activity yet."
+        index={8}
+      />
+      <SecurityCard
+        title="Stay sharp!"
+        subtitle="Review high-risk employees"
+        action={{ label: 'View At-Risk Employees', to: '/admin/employees' }}
+        index={9}
+      />
     </div>
   );
 }

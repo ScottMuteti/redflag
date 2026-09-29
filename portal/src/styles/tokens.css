@@ -55,4 +55,5 @@
   --elev-hover: 0 6px 18px rgba(31, 10, 10, 0.08);
   --elev-pop: 0 12px 32px rgba(31, 10, 10, 0.16);
   --elev-brand: 0 30px 60px -20px rgba(127, 20, 20, 0.35);
+  --drop-soft: drop-shadow(0 2px 4px rgba(31, 10, 10, 0.14));
 }

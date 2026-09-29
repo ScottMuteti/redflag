@@ -7,7 +7,7 @@ import {
   getCampaignResults,
   customizeTemplate,
 } from '../../api/campaigns';
-import { Badge, Card, Empty, Field, Loading, PageHeader, StatusBadge } from '../../components/ui';
+import { Badge, Card, Empty, Field, Loading, PageHeader, StatusBadge } from '../../components/legacy';
 
 const mark = (value) => (value ? <span className="tick">✓</span> : <span className="dash">—</span>);
 
