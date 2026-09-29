@@ -16,7 +16,6 @@ import {
   Send,
   X,
 } from 'lucide-react';
-import { useAuth } from '../../context/AuthContext';
 import { NAV } from '../../components/shell/nav';
 import {
   AreaTrend,
@@ -70,7 +69,7 @@ function SectionHeading({ eyebrow, title, body }) {
       <h2 className="mt-2 text-[32px] leading-tight font-extrabold tracking-tight text-ink sm:text-[38px]">
         {title}
       </h2>
-      {body && <p className="mt-3 text-card leading-relaxed text-ink-2 sm:text-base">{body}</p>}
+      {body && <p className="mt-3 text-label leading-relaxed text-ink-2 sm:text-base">{body}</p>}
     </div>
   );
 }
@@ -161,7 +160,7 @@ function LandingNav({ user }) {
                 <a
                   href={l.href}
                   onClick={() => setOpen(false)}
-                  className="block rounded-control px-2 py-2.5 text-card font-medium text-ink hover:bg-brand-50"
+                  className="block rounded-control px-2 py-2.5 text-label font-medium text-ink hover:bg-brand-50"
                 >
                   {l.label}
                 </a>
@@ -221,7 +220,7 @@ function HeroPreview() {
       </div>
       <div className="absolute -bottom-5 -left-4 rounded-card bg-tooltip px-4 py-3 text-white shadow-pop sm:-left-8">
         <p className="text-micro text-white-70">{previewTooltip.title}</p>
-        <p className="text-card font-bold">{previewTooltip.value}</p>
+        <p className="text-label font-bold">{previewTooltip.value}</p>
         <p className="text-micro text-white-70">{previewTooltip.note}</p>
       </div>
     </div>
@@ -297,7 +296,7 @@ function ProblemStrip() {
         {stats.map((s) => (
           <div key={s.caption}>
             <p className="text-[52px] leading-none font-extrabold tracking-tight">{s.value}</p>
-            <p className="mx-auto mt-3 max-w-sm text-card text-white">{s.caption}</p>
+            <p className="mx-auto mt-3 max-w-sm text-label text-white">{s.caption}</p>
             <p className="mt-2 text-xs text-sidebar-text">Source: {s.source}</p>
           </div>
         ))}
@@ -350,7 +349,7 @@ function ThreatCard({ threat }) {
   return (
     <Card className="flex h-full flex-col" interactive>
       <div className="flex items-center justify-between gap-2">
-        <h3 className="text-card font-bold text-ink">{threat.name}</h3>
+        <h3 className="text-label font-bold text-ink">{threat.name}</h3>
         <div className="flex gap-1.5">
           <Badge tone="brand" icon={sms ? MessageSquare : Mail}>
             {threat.channel}
@@ -419,7 +418,7 @@ function Features() {
                 <span className="grid size-11 place-items-center rounded-full bg-brand-50 text-brand-700">
                   <Icon size={20} strokeWidth={1.75} aria-hidden="true" />
                 </span>
-                <h3 className="mt-4 text-card font-bold text-ink">{f.title}</h3>
+                <h3 className="mt-4 text-label font-bold text-ink">{f.title}</h3>
                 <p className="mt-1.5 text-body leading-relaxed text-ink-2">{f.body}</p>
               </Card>
             );
@@ -505,7 +504,7 @@ function FinalCta({ user }) {
         <h2 className="relative mx-auto max-w-2xl text-[30px] leading-tight font-extrabold tracking-tight text-white sm:text-[38px]">
           {CTA.headline}
         </h2>
-        <p className="relative mx-auto mt-3 max-w-xl text-card text-white-70">{CTA.body}</p>
+        <p className="relative mx-auto mt-3 max-w-xl text-label text-white-70">{CTA.body}</p>
         <div className="relative mt-8 flex flex-wrap justify-center gap-3">
           {user ? (
             <Button
@@ -569,8 +568,9 @@ function Footer() {
   );
 }
 
+// The public page always leads to Log in / Sign up, even if a session is stored.
 function LandingPage() {
-  const { user } = useAuth();
+  const user = null;
   return (
     <div id="top" className="min-h-screen bg-card">
       <a

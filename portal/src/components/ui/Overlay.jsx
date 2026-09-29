@@ -73,7 +73,7 @@ export function Modal({ open, onClose, title, description, footer, size = 'md', 
       >
         <div className="flex items-start justify-between gap-3 border-b border-line px-5 py-4">
           <div>
-            <h2 id={titleId} className="text-card font-semibold text-ink">
+            <h2 id={titleId} className="text-label font-semibold text-ink">
               {title}
             </h2>
             {description && <p className="mt-0.5 text-xs text-ink-3">{description}</p>}
@@ -129,7 +129,7 @@ export function Drawer({
         {title && (
           <div className="flex items-start justify-between gap-3 border-b border-line px-5 py-4">
             <div className="min-w-0">
-              <h2 id={titleId} className="truncate text-card font-semibold text-ink">
+              <h2 id={titleId} className="truncate text-label font-semibold text-ink">
                 {title}
               </h2>
               {subtitle && <p className="mt-0.5 truncate text-xs text-ink-3">{subtitle}</p>}

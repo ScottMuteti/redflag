@@ -16,7 +16,7 @@ export function EmptyState({ icon: Icon = Inbox, title, description, action, cla
       <span className="mb-3 grid size-11 place-items-center rounded-full bg-brand-50 text-brand-700">
         <Icon size={20} strokeWidth={1.75} aria-hidden="true" />
       </span>
-      <p className="text-card font-semibold text-ink">{title}</p>
+      <p className="text-label font-semibold text-ink">{title}</p>
       {description && <p className="mt-1 max-w-sm text-body text-ink-3">{description}</p>}
       {action && <div className="mt-4">{action}</div>}
     </div>
@@ -62,7 +62,7 @@ export function Tooltip({ label, children, className }) {
   );
 }
 
-const AVATAR_SIZES = { sm: 'size-8 text-xs', md: 'size-10 text-body', lg: 'size-14 text-card' };
+const AVATAR_SIZES = { sm: 'size-8 text-xs', md: 'size-10 text-body', lg: 'size-14 text-label' };
 
 export function Avatar({ name, icon: Icon, size = 'sm', tone = 'brand', className }) {
   return (

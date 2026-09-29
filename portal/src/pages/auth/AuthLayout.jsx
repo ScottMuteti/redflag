@@ -48,7 +48,7 @@ function AuthLayout({ children }) {
             </h2>
             <ul className="mt-8 grid gap-3">
               {AUTH_BENEFITS.map((b) => (
-                <li key={b} className="flex items-center gap-3 text-card text-white">
+                <li key={b} className="flex items-center gap-3 text-label text-white">
                   <span className="grid size-6 shrink-0 place-items-center rounded-full bg-white-16">
                     <Check size={14} strokeWidth={2.5} aria-hidden="true" />
                   </span>

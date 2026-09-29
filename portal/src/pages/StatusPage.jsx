@@ -36,7 +36,7 @@ function StatusPage({ code = 404 }) {
           <span className="mx-auto mt-4 mb-3 grid size-12 place-items-center rounded-full bg-brand-50 text-brand-700">
             <Icon size={22} aria-hidden="true" />
           </span>
-          <h1 className="text-page font-bold text-ink">{title}</h1>
+          <h1 className="text-heading font-bold text-ink">{title}</h1>
           <p className="mt-2 text-body text-ink-2">{body}</p>
           <Button as={Link} to={home} variant="primary" className="mt-6">
             {user ? 'Back to dashboard' : 'Go to homepage'}

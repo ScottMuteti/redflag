@@ -49,7 +49,7 @@ export function StatCard({
             <div className="text-stat leading-none font-bold text-ink">
               {value}
               {suffix && (
-                <span className="ml-0.5 text-card font-semibold text-ink-3">{suffix}</span>
+                <span className="ml-0.5 text-label font-semibold text-ink-3">{suffix}</span>
               )}
             </div>
             {trend !== undefined && (

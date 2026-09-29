@@ -33,7 +33,7 @@ export function CardHeader({ title, subtitle, action, className }) {
   return (
     <div className={cn('mb-4 flex items-start justify-between gap-3', className)}>
       <div className="min-w-0">
-        <h2 className="text-card font-semibold text-ink">{title}</h2>
+        <h2 className="text-label font-semibold text-ink">{title}</h2>
         {subtitle && <p className="mt-0.5 text-xs text-ink-3">{subtitle}</p>}
       </div>
       {action && <div className="flex shrink-0 items-center gap-2">{action}</div>}
@@ -45,7 +45,7 @@ export function PageHeader({ title, subtitle, actions }) {
   return (
     <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
       <div>
-        <h1 className="text-page font-bold text-ink">{title}</h1>
+        <h1 className="text-heading font-bold text-ink">{title}</h1>
         {subtitle && <p className="mt-0.5 text-body text-ink-3">{subtitle}</p>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}

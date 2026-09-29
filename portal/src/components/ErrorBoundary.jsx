@@ -25,7 +25,7 @@ class ErrorBoundary extends Component {
           <span className="mx-auto mb-4 grid size-12 place-items-center rounded-full bg-danger-bg text-danger">
             <AlertTriangle size={22} aria-hidden="true" />
           </span>
-          <h1 className="text-page font-bold text-ink">Something went wrong</h1>
+          <h1 className="text-heading font-bold text-ink">Something went wrong</h1>
           <p className="mt-2 text-body text-ink-2">
             This page hit an unexpected error. Reload to try again; your data is safe.
           </p>

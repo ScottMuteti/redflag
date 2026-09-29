@@ -15,7 +15,7 @@ const VARIANTS = {
 const SIZES = {
   sm: 'h-8 gap-1.5 px-3 text-xs',
   md: 'h-9 gap-2 px-3.5 text-body',
-  lg: 'h-11 gap-2 px-5 text-card',
+  lg: 'h-11 gap-2 px-5 text-label',
 };
 
 export const Button = forwardRef(function Button(

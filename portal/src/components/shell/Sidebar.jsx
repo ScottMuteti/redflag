@@ -14,7 +14,7 @@ function SectionLabel({ children }) {
 
 const itemClass = ({ isActive }) =>
   cn(
-    'flex h-10 items-center gap-3 rounded-control px-3 text-card font-medium transition-colors',
+    'flex h-10 items-center gap-3 rounded-control px-3 text-label font-medium transition-colors',
     isActive
       ? 'bg-sidebar-active text-white'
       : 'text-sidebar-text hover:bg-sidebar-hover hover:text-white',
@@ -61,7 +61,7 @@ function Sidebar({ nav, counts = {}, onLogout, onNavigate }) {
           <button
             type="button"
             onClick={onLogout}
-            className="flex h-10 items-center gap-3 rounded-control px-3 text-card font-medium text-sidebar-text transition-colors hover:bg-sidebar-hover hover:text-white"
+            className="flex h-10 items-center gap-3 rounded-control px-3 text-label font-medium text-sidebar-text transition-colors hover:bg-sidebar-hover hover:text-white"
           >
             <LogOut size={18} strokeWidth={1.75} aria-hidden="true" />
             Logout
