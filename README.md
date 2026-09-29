@@ -19,6 +19,45 @@ logistic regression for Kenyan organizations.
 /risk-model          Python logistic regression scorer
 ```
 
+## Flows
+
+### Admin
+
+```mermaid
+flowchart TD
+    A[Register organisation] --> B[Log in]
+    B --> C[Dashboard]
+    C --> D[Employees: add roster + departments]
+    D --> E[Campaigns: create email or SMS campaign]
+    E --> F[Customise template]
+    F --> G{Launch now?}
+    G -- Yes --> H[Launch]
+    G -- No --> I[Schedule] --> H
+    H --> J[Gophish sends email / Africa's Talking sends SMS]
+    J --> K[Events tracked: opened, clicked, submitted, reported]
+    K --> L[View campaign results]
+    L --> M[Compute risk score per employee]
+    M --> N[Risk model predicts susceptibility]
+    N --> O[Analytics: org risk, departments, weekly trend, training]
+    O --> E
+```
+
+### Employee
+
+```mermaid
+flowchart TD
+    A[Receives simulated email or SMS] --> B{Clicks link?}
+    B -- No --> C[No action / reports it]
+    B -- Yes --> D[Landing page: this was a simulation]
+    D --> E[Training auto-assigned]
+    E --> F[Log in to employee portal]
+    F --> G[See risk score + assigned training]
+    G --> H[Take quiz]
+    H --> I{Passed?}
+    I -- Yes --> J[Module completed]
+    I -- No --> H
+```
+
 ## Run locally
 
 1. Create a `.env` (see `docker-compose.yml` / `simulation-engine/src/config/env.js`)

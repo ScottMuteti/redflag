@@ -2,7 +2,7 @@
 name: Feature
 about: Suggest a new feature
 title: ''
-labels: enhancement
+labels: feat
 ---
 
 ## Summary
@@ -23,5 +23,5 @@ labels: enhancement
 
 ## Suggested branch
 
-<!-- category/issue-number-description, e.g. feat/42-quiz-after-fail -->
+<!-- category/issue-number-description, e.g. feat/42-quiz-after-fail. Use this name when you click "Create a branch". -->
 `feat/<issue-number>-<short-description>`

@@ -2,7 +2,7 @@
 name: Bug
 about: Report something broken
 title: ''
-labels: bug
+labels: bugfix
 ---
 
 ## What happened
@@ -19,5 +19,5 @@ labels: bug
 
 ## Suggested branch
 
-<!-- category/issue-number-description, e.g. bugfix/27-login-token-expiry -->
+<!-- category/issue-number-description, e.g. bugfix/27-login-token-expiry. Use this name when you click "Create a branch". -->
 `bugfix/<issue-number>-<short-description>`
