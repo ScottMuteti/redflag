@@ -23,6 +23,7 @@ import {
   Textarea,
   useToast,
 } from '../../components/ui';
+import AuthorisationCheck from '../../components/AuthorisationCheck';
 import { cn } from '../../lib/cn';
 import { useAsync } from '../../lib/useAsync';
 import { formatDateTime } from '../../lib/format';
@@ -76,6 +77,7 @@ function NewCampaignPage() {
   const [edits, setEdits] = useState({});
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(null);
+  const [authorised, setAuthorised] = useState(false);
 
   const { data, error, loading, reload } = useAsync(() =>
     Promise.all([listTemplates(), listDepartments(), listEmployees()]).then(
@@ -123,6 +125,10 @@ function NewCampaignPage() {
 
   async function submit(mode) {
     if (!validate(3)) return;
+    if (mode === 'launch' && !authorised) {
+      setErrors({ authorisation: 'Confirm authorisation before launching or scheduling' });
+      return;
+    }
     setSaving(mode);
     try {
       if (edited) await customizeTemplate(template.key, { subject, body });
@@ -136,15 +142,18 @@ function NewCampaignPage() {
           mode === 'launch' && form.when === 'later'
             ? new Date(form.scheduledAt).toISOString()
             : undefined,
+        acknowledgeAuthorisation: mode === 'launch' ? authorised : undefined,
       });
       if (mode === 'launch' && form.when === 'now') {
         try {
-          const { message } = await launchCampaign(campaign.id);
+          const { message } = await launchCampaign(campaign.id, {
+            acknowledgeAuthorisation: authorised,
+          });
           toast.success(message || 'Campaign launched');
         } catch (err) {
           const detail = err.response?.data?.detail;
           toast.error(
-            `${err.response?.data?.message || 'Launch failed'}${detail ? `: ${detail}` : ''}. Saved as a draft.`,
+            `${err.response?.data?.message || 'Launch failed'}${detail ? `: ${detail}` : ''}. Marked as failed; you can retry from the campaign page.`,
           );
         }
       } else {
@@ -382,6 +391,14 @@ function NewCampaignPage() {
                       {label}
                     </label>
                   ))}
+                  <AuthorisationCheck
+                    checked={authorised}
+                    onChange={(value) => {
+                      setAuthorised(value);
+                      setErrors((e) => ({ ...e, authorisation: undefined }));
+                    }}
+                    error={errors.authorisation}
+                  />
                   {form.when === 'later' && (
                     <FormField
                       label="Launch at"

@@ -251,7 +251,9 @@ function Quiz({ assignment, onFinished }) {
                 {r?.correct ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
                 {r?.correct
                   ? 'Correct'
-                  : `Correct answer: ${q.options[r?.correctIndex ?? q.correctIndex]}`}
+                  : r?.correctIndex !== undefined
+                    ? `Correct answer: ${q.options[r.correctIndex]}`
+                    : 'Incorrect. Review the lessons and try again'}
               </p>
             </div>
           );

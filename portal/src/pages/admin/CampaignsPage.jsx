@@ -29,12 +29,13 @@ import {
   Tabs,
   useToast,
 } from '../../components/ui';
+import AuthorisationCheck from '../../components/AuthorisationCheck';
 import { settle, useAsync } from '../../lib/useAsync';
 import { downloadCsv } from '../../lib/csv';
 import { formatDate, formatPercent } from '../../lib/format';
 import { withFunnel } from '../../lib/metrics';
 
-const STATUS_TABS = ['all', 'running', 'scheduled', 'completed', 'draft'];
+const STATUS_TABS = ['all', 'running', 'scheduled', 'completed', 'draft', 'failed'];
 const TAB_LABEL = {
   all: 'All',
   running: 'Running',
@@ -65,6 +66,7 @@ function CampaignsPage() {
   const [channel, setChannel] = useState('all');
   const [selected, setSelected] = useState([]);
   const [toLaunch, setToLaunch] = useState(null);
+  const [authorised, setAuthorised] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const { data, error, loading, reload } = useAsync(() =>
@@ -110,13 +112,19 @@ function CampaignsPage() {
   async function confirmLaunch() {
     setBusy(true);
     try {
-      const { message } = await launchCampaign(toLaunch.id);
+      const { message } = await launchCampaign(toLaunch.id, {
+        acknowledgeAuthorisation: authorised,
+      });
       toast.success(message || 'Campaign launched');
-      setToLaunch(null);
-      reload();
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Could not launch campaign');
+      const detail = err.response?.data?.detail;
+      toast.error(
+        `${err.response?.data?.message || 'Could not launch campaign'}${detail ? `: ${detail}` : ''}`,
+      );
     } finally {
+      setToLaunch(null);
+      setAuthorised(false);
+      reload();
       setBusy(false);
     }
   }
@@ -216,7 +224,7 @@ function CampaignsPage() {
               onClick: () => navigate(`/admin/campaigns/${r.id}`),
             },
             { label: 'Duplicate', icon: Copy, onClick: () => duplicate(r) },
-            ...(['draft', 'scheduled'].includes(r.status)
+            ...(['draft', 'scheduled', 'failed'].includes(r.status)
               ? [{ label: 'Launch now', icon: Rocket, onClick: () => setToLaunch(r) }]
               : []),
             ...(['running', 'scheduled'].includes(r.status)
@@ -310,9 +318,15 @@ function CampaignsPage() {
         confirmLabel="Launch"
         tone="primary"
         loading={busy}
+        confirmDisabled={!authorised}
         onConfirm={confirmLaunch}
-        onCancel={() => setToLaunch(null)}
-      />
+        onCancel={() => {
+          setToLaunch(null);
+          setAuthorised(false);
+        }}
+      >
+        <AuthorisationCheck checked={authorised} onChange={setAuthorised} />
+      </ConfirmDialog>
     </>
   );
 }

@@ -26,6 +26,7 @@ import {
   Tabs,
   useToast,
 } from '../../components/ui';
+import AuthorisationCheck from '../../components/AuthorisationCheck';
 import { settle, useAsync } from '../../lib/useAsync';
 import { downloadCsv } from '../../lib/csv';
 import { formatDate, formatDateTime, formatPercent } from '../../lib/format';
@@ -59,6 +60,7 @@ function CampaignResultsPage() {
   const [filter, setFilter] = useState('all');
   const [confirm, setConfirm] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [authorised, setAuthorised] = useState(false);
 
   const { data, error, loading, reload } = useAsync(
     () =>
@@ -101,14 +103,14 @@ function CampaignResultsPage() {
     setBusy(true);
     try {
       if (action === 'launch') {
-        const { message } = await launchCampaign(id);
+        const { message } = await launchCampaign(id, { acknowledgeAuthorisation: authorised });
         toast.success(message || 'Campaign launched');
       } else if (action === 'stop') {
         await stopCampaign(id);
         toast.success('Campaign stopped');
       } else {
         await deleteCampaign(id);
-        toast.success('Draft deleted');
+        toast.success('Campaign deleted');
         navigate('/admin/campaigns');
         return;
       }
@@ -121,6 +123,8 @@ function CampaignResultsPage() {
     } finally {
       setBusy(false);
       setConfirm(null);
+      setAuthorised(false);
+      if (action === 'launch') reload();
     }
   }
 
@@ -193,7 +197,7 @@ function CampaignResultsPage() {
             <Button as={Link} to="/admin/campaigns" icon={ArrowLeft}>
               Campaigns
             </Button>
-            {c && ['draft', 'scheduled'].includes(c.status) && (
+            {c && ['draft', 'scheduled', 'failed'].includes(c.status) && (
               <Button variant="primary" icon={Rocket} onClick={() => setConfirm('launch')}>
                 Launch now
               </Button>
@@ -203,7 +207,7 @@ function CampaignResultsPage() {
                 {c.status === 'scheduled' ? 'Unschedule' : 'Stop'}
               </Button>
             )}
-            {c?.status === 'draft' && (
+            {['draft', 'failed'].includes(c?.status) && (
               <Button variant="danger" icon={Trash2} onClick={() => setConfirm('delete')}>
                 Delete
               </Button>
@@ -230,6 +234,22 @@ function CampaignResultsPage() {
           </>
         }
       />
+
+      {c?.status === 'failed' && (
+        <div
+          role="alert"
+          className="mb-4 rounded-card border border-danger bg-danger-bg p-4 text-body text-danger"
+        >
+          <p className="font-semibold">Launch failed</p>
+          {c.failureReason && <p className="mt-1">{c.failureReason}</p>}
+          <p className="mt-1 text-ink-2">Fix the cause, then use Launch now to retry.</p>
+        </div>
+      )}
+      {c?.authorisedAt && (
+        <p className="mb-4 text-xs text-ink-3">
+          Authorisation confirmed {formatDate(c.authorisedAt)}
+        </p>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard index={0} loading={loading} label="Targets" value={stats.n} />
@@ -324,21 +344,29 @@ function CampaignResultsPage() {
             ? 'Launch campaign now?'
             : confirm === 'stop'
               ? 'Stop this campaign?'
-              : 'Delete this draft?'
+              : 'Delete this campaign?'
         }
         message={
           confirm === 'launch'
             ? 'Messages go out to the selected audience straight away.'
             : confirm === 'stop'
               ? 'No further events will be tracked. Results so far are kept.'
-              : 'The draft will be removed. This can’t be undone.'
+              : 'The campaign will be removed. This can’t be undone.'
         }
         confirmLabel={confirm === 'launch' ? 'Launch' : confirm === 'stop' ? 'Stop' : 'Delete'}
         tone={confirm === 'launch' ? 'primary' : 'danger'}
         loading={busy}
+        confirmDisabled={confirm === 'launch' && !authorised}
         onConfirm={() => run(confirm)}
-        onCancel={() => setConfirm(null)}
-      />
+        onCancel={() => {
+          setConfirm(null);
+          setAuthorised(false);
+        }}
+      >
+        {confirm === 'launch' && (
+          <AuthorisationCheck checked={authorised} onChange={setAuthorised} />
+        )}
+      </ConfirmDialog>
     </>
   );
 }
