@@ -1,8 +1,17 @@
 require('dotenv').config();
 
+const INSECURE_SECRETS = ['', 'change-me'];
+const jwtSecret = process.env.JWT_SECRET || '';
+if (INSECURE_SECRETS.includes(jwtSecret)) {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('JWT_SECRET must be set to a strong value in production');
+  }
+  console.warn('JWT_SECRET is unset or a placeholder; fine for local dev only');
+}
+
 module.exports = {
   port: process.env.PORT || 4000,
-  jwtSecret: process.env.JWT_SECRET || 'change-me',
+  jwtSecret: jwtSecret || 'change-me',
   db: {
     host: process.env.DB_HOST || 'localhost',
     port: process.env.DB_PORT || 5432,

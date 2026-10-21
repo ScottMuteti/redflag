@@ -87,4 +87,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 ## Known constraints
 
 - Africa's Talking sandbox: no custom sender ID; messages go to the simulator only
-- Schema is a single `schema.sql` run on first DB init — no migration tool yet
+- Migrations: `simulation-engine/src/db/migrations/*.sql`, applied on start or `npm run migrate`

@@ -3,7 +3,7 @@
 require('dotenv').config();
 const bcrypt = require('bcrypt');
 const db = require('../config/db');
-const { applyUpgrades } = require('./upgrade');
+const { migrate } = require('./migrate');
 const starterModules = require('../modules/training/training.starter');
 
 const ORG = 'Demo Sacco Ltd';
@@ -39,7 +39,7 @@ const rand = () => {
 };
 
 async function run() {
-  await applyUpgrades();
+  await migrate();
   const { rows: existing } = await db.query('SELECT id FROM organizations WHERE name = $1', [ORG]);
   if (existing.length) {
     console.log(`"${ORG}" already exists, nothing to do.`);

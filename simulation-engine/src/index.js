@@ -1,18 +1,18 @@
 require('dotenv').config();
 const app = require('./app');
 const env = require('./config/env');
-const { applyUpgrades } = require('./db/upgrade');
+const { migrate } = require('./db/migrate');
 const { launchDueCampaigns } = require('./modules/campaigns/campaigns.routes');
 
 async function start() {
   // The DB container may still be starting; retry a few times before giving up.
   for (let attempt = 1; ; attempt += 1) {
     try {
-      await applyUpgrades();
+      await migrate();
       break;
     } catch (err) {
       if (attempt >= 10) throw err;
-      console.warn(`Schema upgrade failed (${err.message}), retrying…`);
+      console.warn(`Migration failed (${err.message}), retrying…`);
       await new Promise((resolve) => setTimeout(resolve, 3000));
     }
   }

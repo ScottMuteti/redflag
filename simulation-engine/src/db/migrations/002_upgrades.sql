@@ -1,5 +1,5 @@
--- Idempotent additions on top of schema.sql, run on every engine start
--- (schema.sql only runs when the database volume is first created).
+-- Additions made after the first schema, before migrations were tracked.
+-- Statements stay idempotent so legacy databases can apply them safely.
 
 ALTER TABLE campaign_templates
   ADD COLUMN IF NOT EXISTS difficulty_level VARCHAR(10) NOT NULL DEFAULT 'medium';
