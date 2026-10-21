@@ -1,0 +1,18 @@
+{
+  "tenure_days": 0.1511,
+  "prior_sent": 0.1637,
+  "prior_open_rate": 0.4095,
+  "prior_click_rate": 0.2847,
+  "prior_report_rate": 0.0087,
+  "training_completed": -0.511,
+  "department_Customer Support": 0.17,
+  "department_Finance": 0.0409,
+  "department_HR": 0.171,
+  "department_IT": -0.4498,
+  "department_Operations": 0.1439,
+  "department_Sales": -0.0393,
+  "difficulty_hard": 0.5088,
+  "difficulty_medium": -0.4721,
+  "vector_email": 0.0447,
+  "vector_sms": -0.0081
+}

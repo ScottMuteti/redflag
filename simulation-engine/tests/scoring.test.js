@@ -18,7 +18,7 @@ describe('POST /api/scoring/compute', () => {
   it('computes and persists a susceptibility score', async () => {
     db.query
       .mockResolvedValueOnce({
-        rows: [{ hireDate: '2024-01-01', department: 'Finance', campaignsSent: 10, opened: 8, clicked: 5, submitted: 2, reported: 1 }],
+        rows: [{ hireDate: '2024-01-01', department: 'Finance', priorSent: 10, opened: 8, clicked: 5, reported: 1, trainingCompleted: 0 }],
       })
       .mockResolvedValueOnce({
         rows: [{ id: 1, employeeId: 10, score: 0.72, riskLevel: 'high', modelVersion: 'v1', computedAt: '2026-01-01' }],
@@ -31,13 +31,13 @@ describe('POST /api/scoring/compute', () => {
     expect(res.body.riskLevel).toBe('high');
     expect(axios.post).toHaveBeenCalledWith(
       expect.stringContaining('/predict'),
-      expect.objectContaining({ department: 'Finance', campaigns_sent: 10, clicked: 5 }),
+      expect.objectContaining({ department: 'Finance', prior_sent: 10, prior_click_rate: 0.5, difficulty: 'medium', vector: 'email' }),
       expect.objectContaining({ timeout: expect.any(Number) }),
     );
   });
 
   const featureRow = {
-    rows: [{ hireDate: null, department: null, campaignsSent: 0, opened: 0, clicked: 0, submitted: 0, reported: 0 }],
+    rows: [{ hireDate: null, department: null, priorSent: 0, opened: 0, clicked: 0, reported: 0, trainingCompleted: 0 }],
   };
 
   it('returns 503 and stores nothing when the scoring service times out', async () => {
@@ -69,7 +69,7 @@ describe('POST /api/scoring/compute', () => {
 
   it('returns 503 when the ML service has no trained model yet', async () => {
     db.query.mockResolvedValueOnce({
-      rows: [{ hireDate: null, department: null, campaignsSent: 0, opened: 0, clicked: 0, submitted: 0, reported: 0 }],
+      rows: [{ hireDate: null, department: null, priorSent: 0, opened: 0, clicked: 0, reported: 0, trainingCompleted: 0 }],
     });
     axios.post.mockRejectedValue({ response: { status: 503 } });
 

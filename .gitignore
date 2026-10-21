@@ -37,6 +37,7 @@ venv/
 # ML artifacts
 risk-model/models/*.joblib
 risk-model/models/metadata.json
+risk-model/models/registry.json
 risk-model/data/
 
 # Editor / OS

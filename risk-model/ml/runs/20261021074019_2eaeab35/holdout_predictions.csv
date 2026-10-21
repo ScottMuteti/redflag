@@ -1,0 +1,401 @@
+tenure_days,prior_sent,prior_open_rate,prior_click_rate,prior_report_rate,training_completed,department,difficulty,vector,actual_failed,predicted_proba,persona
+993.0,3,0.6666666666666666,0.0,0.0,0,Customer Support,medium,sms,0,0.433,average
+46.0,4,1.0,0.5,0.25,1,Customer Support,medium,email,0,0.3744,average
+1286.0,5,0.2,0.0,0.2,0,Customer Support,medium,email,0,0.3822,careful
+317.0,4,0.75,0.5,0.25,1,Operations,medium,email,0,0.3116,hurried
+2166.0,1,0.0,0.0,0.0,0,HR,hard,sms,1,0.4677,hurried
+3277.0,2,0.5,0.0,0.0,0,Operations,medium,sms,0,0.4316,average
+337.0,2,0.0,0.0,0.0,0,IT,medium,sms,0,0.1324,careful
+649.0,2,1.0,0.5,0.0,0,HR,medium,sms,1,0.5992,high_risk
+865.0,3,0.6666666666666666,0.0,0.0,1,IT,medium,sms,0,0.1161,hurried
+3579.0,4,1.0,0.75,0.0,0,Operations,medium,email,0,0.7873,hurried
+2461.0,4,0.5,0.25,0.25,0,HR,medium,email,0,0.5378,hurried
+985.0,5,0.4,0.0,0.0,0,Sales,medium,email,0,0.3759,careful
+585.0,2,0.5,0.0,0.0,0,HR,medium,sms,0,0.3456,careful
+996.0,5,0.8,0.4,0.0,0,Operations,medium,email,0,0.6232,average
+3276.0,4,1.0,0.5,0.0,1,Finance,medium,email,0,0.4542,hurried
+2627.0,3,1.0,1.0,0.0,1,HR,medium,sms,1,0.5325,high_risk
+2330.0,3,0.6666666666666666,0.0,0.0,1,Customer Support,medium,sms,0,0.2319,careful
+1895.0,2,1.0,1.0,0.0,0,HR,medium,sms,0,0.7369,hurried
+833.0,1,0.0,0.0,1.0,0,IT,hard,sms,0,0.2881,average
+3480.0,3,1.0,0.3333333333333333,0.0,1,Sales,medium,sms,0,0.3654,careful
+1777.0,5,0.6,0.2,0.0,1,Customer Support,medium,email,0,0.2907,average
+159.0,2,1.0,1.0,0.0,0,Finance,medium,sms,0,0.6565,hurried
+1532.0,5,0.6,0.4,0.4,1,Sales,medium,email,0,0.2804,careful
+2567.0,1,0.0,0.0,0.0,0,Finance,hard,sms,0,0.4499,average
+1179.0,1,1.0,0.0,0.0,0,IT,hard,sms,1,0.5687,high_risk
+2903.0,1,1.0,0.0,0.0,0,IT,hard,sms,1,0.6287,average
+3146.0,1,1.0,1.0,0.0,0,Finance,hard,sms,1,0.875,high_risk
+1450.0,3,1.0,0.6666666666666666,0.0,1,IT,medium,sms,0,0.277,hurried
+1102.0,4,0.5,0.25,0.25,1,Finance,medium,email,0,0.2145,average
+2101.0,2,0.0,0.0,0.0,0,Finance,medium,sms,0,0.2435,careful
+2593.0,2,1.0,0.0,0.0,0,Operations,medium,sms,0,0.5524,average
+824.0,5,0.6,0.0,0.0,0,HR,medium,email,0,0.4785,careful
+996.0,3,1.0,0.3333333333333333,0.0,0,Operations,medium,sms,1,0.5969,average
+810.0,5,0.4,0.4,0.0,0,Operations,medium,email,0,0.5021,careful
+2111.0,4,0.75,0.5,0.25,1,Sales,medium,email,0,0.3283,average
+890.0,4,0.25,0.0,0.0,1,IT,medium,email,0,0.0875,careful
+1568.0,5,0.4,0.0,0.2,1,IT,medium,email,0,0.1249,average
+649.0,3,1.0,0.6666666666666666,0.0,0,HR,medium,sms,1,0.6609,high_risk
+2708.0,3,0.6666666666666666,0.3333333333333333,0.3333333333333333,1,Finance,medium,sms,0,0.2767,average
+1869.0,4,0.25,0.0,0.25,1,IT,medium,email,0,0.1004,average
+3218.0,3,0.0,0.0,0.0,1,IT,medium,sms,0,0.0781,careful
+34.0,4,0.75,0.5,0.0,0,Customer Support,medium,email,1,0.5756,average
+178.0,2,1.0,0.5,0.0,0,Sales,medium,sms,1,0.5309,hurried
+433.0,1,0.0,0.0,1.0,0,Sales,hard,sms,0,0.3653,careful
+985.0,4,0.25,0.0,0.0,0,Sales,medium,email,0,0.3104,careful
+2168.0,4,0.5,0.0,0.25,1,Operations,medium,email,0,0.2204,careful
+,1,0.0,0.0,0.0,0,Sales,hard,sms,0,0.4036,average
+,4,1.0,0.5,0.0,0,HR,medium,email,1,0.6849,hurried
+2327.0,4,1.0,0.75,0.0,1,Finance,medium,email,0,0.4755,high_risk
+3502.0,1,1.0,1.0,0.0,0,IT,hard,sms,0,0.8186,careful
+1060.0,5,0.6,0.4,0.0,0,Sales,medium,email,0,0.5238,careful
+1046.0,3,0.6666666666666666,0.0,0.6666666666666666,1,Sales,medium,sms,0,0.1726,average
+856.0,3,1.0,0.3333333333333333,0.0,1,IT,medium,sms,0,0.207,average
+3510.0,5,1.0,0.6,0.4,1,Finance,medium,email,1,0.5177,high_risk
+2330.0,2,1.0,0.0,0.0,0,Customer Support,medium,sms,0,0.5494,careful
+3488.0,3,0.0,0.0,0.0,1,HR,medium,sms,0,0.1409,careful
+1894.0,3,1.0,0.6666666666666666,0.0,0,Operations,medium,sms,0,0.6944,hurried
+2147.0,5,0.8,0.2,0.0,1,Operations,medium,email,0,0.3474,hurried
+1300.0,5,0.8,0.0,0.4,1,Customer Support,medium,email,0,0.291,careful
+1197.0,3,0.6666666666666666,0.6666666666666666,0.0,0,Finance,medium,sms,0,0.5565,average
+3117.0,4,1.0,0.5,0.0,1,Finance,medium,email,1,0.4485,high_risk
+578.0,5,0.2,0.0,0.4,1,Customer Support,medium,email,0,0.1549,careful
+2959.0,1,1.0,1.0,0.0,0,Operations,hard,sms,1,0.8831,hurried
+1528.0,1,0.0,0.0,0.0,0,Sales,hard,sms,1,0.3936,average
+,1,0.0,0.0,0.0,0,IT,hard,sms,0,0.3098,average
+981.0,4,0.5,0.25,0.25,1,Operations,medium,email,0,0.2293,average
+248.0,4,0.75,0.5,0.0,0,Finance,medium,email,1,0.5514,hurried
+2046.0,4,0.75,0.5,0.25,1,Operations,medium,email,0,0.3677,average
+2867.0,5,0.8,0.4,0.2,1,Customer Support,medium,email,1,0.4223,hurried
+3407.0,1,1.0,1.0,0.0,0,HR,hard,sms,1,0.8923,average
+2038.0,3,1.0,0.6666666666666666,0.0,0,Customer Support,medium,sms,0,0.7043,average
+2214.0,2,1.0,0.0,0.0,0,Sales,medium,sms,0,0.4931,average
+1024.0,4,1.0,0.5,0.0,1,Operations,medium,email,0,0.3995,hurried
+2397.0,2,0.5,0.5,0.0,0,Operations,medium,sms,1,0.511,hurried
+,5,0.2,0.0,0.0,1,Finance,medium,email,0,0.1783,careful
+3280.0,5,0.6,0.2,0.2,0,HR,medium,email,0,0.6122,careful
+3276.0,3,1.0,0.3333333333333333,0.0,1,Finance,medium,sms,1,0.3772,hurried
+1235.0,1,1.0,0.0,0.0,0,Sales,hard,sms,0,0.6671,careful
+2978.0,2,1.0,0.5,0.0,0,Finance,medium,sms,1,0.6479,high_risk
+2330.0,4,0.75,0.0,0.25,1,Customer Support,medium,email,0,0.2847,careful
+3513.0,3,0.6666666666666666,0.0,0.0,1,Finance,medium,sms,0,0.2396,average
+1122.0,5,1.0,0.8,0.0,0,Operations,medium,email,1,0.7527,hurried
+1197.0,2,0.5,0.5,0.0,0,Finance,medium,sms,1,0.442,average
+3632.0,5,0.8,0.2,0.2,1,Sales,medium,email,1,0.3565,average
+905.0,4,0.75,0.0,0.25,1,Customer Support,medium,email,0,0.2445,careful
+430.0,3,0.6666666666666666,0.3333333333333333,0.3333333333333333,1,Sales,medium,sms,0,0.2024,hurried
+36.0,3,0.3333333333333333,0.0,0.0,0,Customer Support,medium,sms,0,0.3104,careful
+,5,0.4,0.0,0.0,0,HR,medium,email,0,0.4573,careful
+3075.0,4,1.0,0.5,0.0,1,Sales,medium,email,0,0.4272,average
+2638.0,1,1.0,0.0,0.0,0,Finance,hard,sms,0,0.7269,hurried
+159.0,5,0.8,0.6,0.0,1,Finance,medium,email,0,0.3397,hurried
+1987.0,5,1.0,0.4,0.0,1,Operations,medium,email,0,0.44,hurried
+,1,1.0,0.0,0.0,0,Finance,hard,sms,0,0.7263,careful
+1623.0,1,0.0,0.0,0.0,0,Customer Support,hard,sms,1,0.448,average
+2828.0,1,0.0,0.0,0.0,0,Customer Support,hard,sms,1,0.4915,hurried
+,4,0.25,0.0,0.0,1,Finance,medium,email,0,0.152,careful
+2489.0,4,0.0,0.0,0.5,1,Operations,medium,email,0,0.1428,average
+1960.0,3,1.0,1.0,0.0,1,Sales,medium,sms,0,0.4559,average
+2416.0,3,0.6666666666666666,0.6666666666666666,0.0,1,HR,medium,sms,0,0.3571,hurried
+178.0,4,1.0,0.5,0.0,1,Sales,medium,email,1,0.3289,hurried
+1597.0,2,1.0,0.5,0.5,0,Sales,medium,sms,1,0.5863,average
+2286.0,2,0.5,0.5,0.0,0,Finance,medium,sms,1,0.4812,average
+2843.0,5,1.0,0.6,0.0,0,Operations,medium,email,0,0.7656,hurried
+1275.0,2,0.5,0.0,0.0,0,Sales,medium,sms,0,0.3211,careful
+1284.0,1,0.0,0.0,0.0,0,IT,hard,sms,0,0.2936,careful
+,3,1.0,0.0,0.0,1,HR,medium,sms,0,0.3046,average
+2693.0,5,0.6,0.6,0.0,1,Sales,medium,email,0,0.3518,average
+700.0,3,0.3333333333333333,0.3333333333333333,0.0,0,IT,medium,sms,0,0.2643,average
+2335.0,1,1.0,0.0,0.0,0,Customer Support,hard,sms,0,0.7434,average
+1851.0,4,1.0,0.5,0.0,0,Sales,medium,email,1,0.6573,hurried
+2014.0,4,1.0,0.75,0.0,1,IT,medium,email,1,0.3466,high_risk
+355.0,4,1.0,0.5,0.25,0,Sales,medium,email,0,0.6092,hurried
+3195.0,4,0.5,0.25,0.0,1,Operations,medium,email,0,0.2889,average
+98.0,4,0.5,0.25,0.5,0,HR,medium,email,0,0.4547,average
+1895.0,1,1.0,1.0,0.0,0,HR,hard,sms,1,0.8693,hurried
+833.0,4,0.5,0.25,0.25,0,IT,medium,email,0,0.3306,average
+402.0,5,0.4,0.0,0.6,1,Finance,medium,email,0,0.1666,average
+1824.0,5,0.6,0.4,0.2,1,Operations,medium,email,0,0.3263,careful
+1946.0,5,0.2,0.0,0.2,0,Operations,medium,email,0,0.3988,careful
+,2,0.0,0.0,0.0,0,Operations,medium,sms,0,0.2797,careful
+,5,0.8,0.6,0.4,1,HR,medium,email,0,0.4221,hurried
+337.0,5,0.6,0.4,0.0,1,Customer Support,medium,email,0,0.2845,hurried
+1060.0,3,0.3333333333333333,0.0,0.0,0,Sales,medium,sms,1,0.2976,careful
+2065.0,5,0.4,0.0,0.2,0,IT,medium,email,1,0.3202,average
+1514.0,2,0.5,0.0,0.0,0,IT,medium,sms,1,0.2452,hurried
+1046.0,2,1.0,0.0,1.0,0,Sales,medium,sms,0,0.4604,average
+,4,0.75,0.0,0.0,0,IT,medium,email,0,0.3806,careful
+2472.0,2,1.0,1.0,0.0,0,Customer Support,medium,sms,1,0.7526,high_risk
+1777.0,3,0.6666666666666666,0.3333333333333333,0.0,1,Customer Support,medium,sms,0,0.2729,average
+,1,0.0,0.0,0.0,0,Customer Support,hard,sms,0,0.4548,average
+955.0,2,1.0,0.0,0.5,0,HR,medium,sms,0,0.5048,careful
+47.0,5,0.4,0.0,0.0,0,Customer Support,medium,email,0,0.3932,careful
+890.0,1,0.0,0.0,0.0,0,IT,hard,sms,0,0.2819,careful
+2271.0,2,1.0,0.0,0.0,0,Customer Support,medium,sms,0,0.5473,average
+1754.0,4,0.5,0.0,0.25,1,Finance,medium,email,0,0.1936,average
+1892.0,1,0.0,0.0,0.0,0,Operations,hard,sms,0,0.4512,average
+1818.0,2,1.0,0.0,0.0,0,HR,medium,sms,0,0.5312,average
+1568.0,3,0.3333333333333333,0.0,0.0,1,IT,medium,sms,0,0.0897,average
+3343.0,4,0.75,0.0,0.0,1,Sales,medium,email,0,0.2702,average
+2340.0,5,1.0,1.0,0.0,0,Finance,medium,email,0,0.7966,high_risk
+3127.0,2,0.5,0.5,0.0,0,Customer Support,medium,sms,0,0.5439,average
+2518.0,2,1.0,1.0,0.0,0,Operations,medium,sms,0,0.749,high_risk
+535.0,4,0.25,0.0,0.25,1,HR,medium,email,0,0.1461,average
+3630.0,3,0.3333333333333333,0.3333333333333333,0.0,0,Finance,medium,sms,0,0.473,average
+1379.0,2,1.0,0.5,0.0,0,Customer Support,medium,sms,0,0.6242,average
+1894.0,4,0.75,0.5,0.0,0,Operations,medium,email,1,0.6337,hurried
+2461.0,3,0.6666666666666666,0.3333333333333333,0.0,0,HR,medium,sms,0,0.5603,hurried
+2214.0,5,0.6,0.0,0.2,0,Sales,medium,email,0,0.4783,average
+3276.0,1,1.0,1.0,0.0,0,Finance,hard,sms,0,0.8771,hurried
+,5,0.6,0.2,0.2,1,HR,medium,email,0,0.2804,average
+3322.0,2,1.0,0.0,0.0,0,Customer Support,medium,sms,0,0.5847,average
+,1,1.0,0.0,0.0,0,Customer Support,hard,sms,0,0.7512,average
+1947.0,4,1.0,0.5,0.25,1,Sales,medium,email,0,0.3901,hurried
+3142.0,5,0.4,0.0,0.2,1,Finance,medium,email,0,0.2265,average
+1658.0,2,0.5,0.5,0.0,0,Operations,medium,sms,0,0.4842,careful
+34.0,2,1.0,0.5,0.0,0,Customer Support,medium,sms,1,0.5774,average
+1713.0,2,1.0,0.0,0.0,0,Finance,medium,sms,0,0.4949,careful
+1079.0,3,0.6666666666666666,0.0,0.0,0,Customer Support,medium,sms,1,0.4361,careful
+317.0,1,1.0,1.0,0.0,0,Operations,hard,sms,1,0.8374,hurried
+2959.0,2,1.0,1.0,0.0,0,Operations,medium,sms,1,0.7608,hurried
+903.0,5,1.0,0.4,0.2,1,HR,medium,email,1,0.4101,high_risk
+1289.0,5,0.0,0.0,0.0,0,IT,medium,email,0,0.2073,careful
+2571.0,2,1.0,0.0,0.0,0,Operations,medium,sms,0,0.5516,careful
+1656.0,1,1.0,0.0,0.0,0,HR,hard,sms,0,0.7244,careful
+711.0,2,1.0,1.0,0.0,0,HR,medium,sms,1,0.7023,hurried
+1267.0,1,1.0,0.0,0.0,0,Operations,hard,sms,0,0.7074,average
+2723.0,3,0.6666666666666666,0.0,0.0,0,IT,medium,sms,0,0.3456,careful
+1961.0,2,0.5,0.5,0.5,0,Sales,medium,sms,1,0.4543,average
+1289.0,4,0.0,0.0,0.0,0,IT,medium,email,0,0.1889,careful
+587.0,3,0.6666666666666666,0.3333333333333333,0.0,0,Customer Support,medium,sms,0,0.4924,careful
+2472.0,5,1.0,0.8,0.0,0,Customer Support,medium,email,1,0.7916,high_risk
+163.0,4,0.25,0.0,0.0,0,HR,medium,email,0,0.3302,average
+1122.0,2,1.0,1.0,0.0,0,Operations,medium,sms,1,0.709,hurried
+1114.0,4,0.75,0.25,0.0,1,Operations,medium,email,0,0.287,average
+2706.0,1,1.0,1.0,0.0,0,HR,hard,sms,1,0.8821,average
+3277.0,3,0.3333333333333333,0.0,0.0,1,Operations,medium,sms,0,0.186,average
+2952.0,3,1.0,0.0,0.0,0,Operations,medium,sms,1,0.5935,average
+3513.0,5,0.6,0.0,0.2,1,Finance,medium,email,0,0.2808,average
+3535.0,4,1.0,0.5,0.0,0,Finance,medium,email,0,0.7263,hurried
+3212.0,4,0.75,0.5,0.0,0,Finance,medium,email,1,0.6539,hurried
+2271.0,5,0.4,0.0,0.2,1,Customer Support,medium,email,0,0.227,average
+937.0,4,0.5,0.25,0.25,1,IT,medium,email,0,0.1404,careful
+1352.0,4,1.0,0.25,0.0,0,Sales,medium,email,1,0.5879,hurried
+3166.0,3,0.3333333333333333,0.3333333333333333,0.0,1,IT,medium,sms,0,0.1433,careful
+3356.0,4,0.75,0.25,0.0,0,Operations,medium,email,1,0.6311,careful
+432.0,1,1.0,0.0,0.0,0,Operations,hard,sms,0,0.6818,average
+567.0,2,0.5,0.5,0.0,0,Finance,medium,sms,0,0.4196,careful
+1886.0,3,1.0,0.0,0.0,0,Customer Support,medium,sms,0,0.5622,hurried
+629.0,1,0.0,0.0,0.0,0,Operations,hard,sms,1,0.4063,average
+3316.0,3,0.6666666666666666,0.6666666666666666,0.0,1,Finance,medium,sms,1,0.3571,hurried
+,1,1.0,0.0,0.0,0,Sales,hard,sms,1,0.7101,high_risk
+1675.0,2,1.0,0.5,0.0,0,Finance,medium,sms,0,0.6037,average
+1658.0,5,0.4,0.2,0.2,1,Operations,medium,email,0,0.2384,careful
+2933.0,1,1.0,0.0,0.0,0,HR,hard,sms,0,0.7598,careful
+1182.0,2,0.5,0.0,0.0,0,Sales,medium,sms,0,0.3182,careful
+3339.0,4,0.25,0.0,0.0,1,IT,medium,email,0,0.1203,average
+3142.0,1,0.0,0.0,0.0,0,Finance,hard,sms,0,0.4706,average
+2627.0,1,1.0,1.0,0.0,0,HR,hard,sms,1,0.8809,high_risk
+2852.0,3,0.6666666666666666,0.3333333333333333,0.3333333333333333,0,Sales,medium,sms,1,0.5254,average
+3272.0,4,1.0,0.5,0.25,1,Customer Support,medium,email,1,0.4886,high_risk
+2518.0,5,1.0,0.8,0.0,0,Operations,medium,email,0,0.7884,high_risk
+,4,0.75,0.25,0.25,1,Sales,medium,email,0,0.2685,careful
+3150.0,5,0.2,0.2,0.4,1,Operations,medium,email,0,0.2366,careful
+3402.0,2,0.5,0.5,0.0,0,Finance,medium,sms,0,0.5217,hurried
+1365.0,4,0.5,0.0,0.25,0,Sales,medium,email,1,0.3915,careful
+1103.0,1,1.0,0.0,0.0,0,Operations,hard,sms,1,0.7025,average
+903.0,4,1.0,0.5,0.0,1,HR,medium,email,0,0.4018,high_risk
+1182.0,4,0.75,0.0,0.0,0,Sales,medium,email,0,0.4539,careful
+1960.0,1,1.0,1.0,0.0,0,Sales,hard,sms,1,0.8447,average
+1107.0,3,0.3333333333333333,0.0,0.0,1,Finance,medium,sms,0,0.1308,careful
+2286.0,1,1.0,1.0,0.0,0,Finance,hard,sms,0,0.8607,average
+2923.0,5,0.6,0.0,0.4,1,IT,medium,email,0,0.1811,average
+2852.0,2,0.5,0.5,0.0,0,Sales,medium,sms,0,0.4817,average
+722.0,5,0.4,0.2,0.2,0,IT,medium,email,0,0.3167,average
+207.0,1,0.0,0.0,0.0,0,HR,hard,sms,0,0.3981,careful
+398.0,4,1.0,0.75,0.0,0,HR,medium,email,0,0.7056,hurried
+3212.0,5,0.8,0.6,0.0,0,Finance,medium,email,0,0.711,hurried
+955.0,1,1.0,0.0,1.0,0,HR,hard,sms,0,0.7116,careful
+1454.0,3,0.6666666666666666,0.3333333333333333,0.0,0,Sales,medium,sms,0,0.4715,hurried
+2046.0,5,0.6,0.4,0.4,1,Operations,medium,email,0,0.3352,average
+1421.0,1,0.0,0.0,0.0,0,Operations,hard,sms,0,0.4343,careful
+2830.0,1,1.0,0.0,0.0,0,HR,hard,sms,1,0.7571,average
+2693.0,1,1.0,1.0,0.0,0,Sales,hard,sms,1,0.8582,average
+516.0,1,1.0,0.0,0.0,0,Operations,hard,sms,0,0.6844,average
+1184.0,5,1.0,0.6,0.0,0,Customer Support,medium,email,0,0.725,hurried
+1275.0,4,0.75,0.25,0.25,0,Sales,medium,email,0,0.5154,careful
+249.0,5,0.2,0.2,0.4,0,IT,medium,email,0,0.2566,average
+2330.0,1,1.0,0.0,0.0,0,Customer Support,hard,sms,0,0.7433,careful
+1551.0,4,1.0,0.75,0.0,0,Sales,medium,email,1,0.6966,high_risk
+1821.0,5,0.2,0.0,0.4,1,HR,medium,email,0,0.1801,careful
+3597.0,2,1.0,1.0,0.0,0,Finance,medium,sms,0,0.7589,hurried
+1657.0,4,0.75,0.0,0.25,1,Sales,medium,email,0,0.2265,careful
+,3,1.0,0.6666666666666666,0.3333333333333333,1,Sales,medium,sms,0,0.3913,average
+3003.0,2,0.5,0.5,0.0,0,IT,medium,sms,1,0.3866,hurried
+201.0,4,1.0,0.5,0.25,0,Customer Support,medium,email,0,0.6527,average
+1466.0,5,0.8,0.2,0.0,0,Operations,medium,email,1,0.5969,average
+2166.0,2,0.5,0.5,0.0,0,HR,medium,sms,1,0.5094,hurried
+875.0,4,0.5,0.25,0.0,1,Finance,medium,email,0,0.2075,careful
+2923.0,1,0.0,0.0,0.0,0,IT,hard,sms,0,0.3452,average
+3594.0,1,0.0,0.0,0.0,0,Customer Support,hard,sms,1,0.5192,hurried
+3167.0,4,0.5,0.25,0.25,0,IT,medium,email,0,0.4093,hurried
+1236.0,3,0.6666666666666666,0.0,0.0,1,Operations,medium,sms,0,0.2007,average
+2706.0,5,0.6,0.4,0.2,0,HR,medium,email,0,0.6346,average
+813.0,1,1.0,1.0,0.0,0,Customer Support,hard,sms,1,0.8503,high_risk
+2328.0,1,0.0,0.0,0.0,0,Sales,hard,sms,0,0.4217,careful
+1289.0,1,0.0,0.0,0.0,0,IT,hard,sms,0,0.2938,careful
+2274.0,4,1.0,0.75,0.0,0,Operations,medium,email,1,0.7539,high_risk
+1987.0,4,1.0,0.5,0.0,1,Operations,medium,email,0,0.4335,hurried
+163.0,1,0.0,0.0,0.0,0,HR,hard,sms,0,0.3966,average
+3488.0,1,0.0,0.0,0.0,0,HR,hard,sms,0,0.5156,careful
+3516.0,1,0.0,0.0,0.0,0,Customer Support,hard,sms,0,0.5164,average
+2586.0,4,0.25,0.25,0.25,1,HR,medium,email,0,0.2236,careful
+430.0,2,0.5,0.5,0.0,0,Sales,medium,sms,0,0.3954,hurried
+929.0,3,0.3333333333333333,0.0,0.0,0,Customer Support,medium,sms,0,0.3388,careful
+875.0,1,1.0,0.0,0.0,0,Finance,hard,sms,0,0.6733,careful
+1093.0,1,1.0,0.0,0.0,0,Operations,hard,sms,1,0.7022,average
+1670.0,3,0.6666666666666666,0.0,0.3333333333333333,1,IT,medium,sms,0,0.1301,hurried
+525.0,1,1.0,1.0,0.0,0,Sales,hard,sms,0,0.8154,average
+3468.0,3,1.0,0.3333333333333333,0.0,0,Finance,medium,sms,0,0.6566,average
+3119.0,4,1.0,0.75,0.0,0,Customer Support,medium,email,0,0.7804,average
+2474.0,5,0.4,0.0,0.2,1,Finance,medium,email,0,0.21,careful
+3402.0,1,0.0,0.0,0.0,0,Finance,hard,sms,1,0.48,hurried
+2686.0,4,1.0,0.75,0.25,0,IT,medium,email,1,0.6445,high_risk
+3632.0,1,0.0,0.0,0.0,0,Sales,hard,sms,1,0.4683,average
+2386.0,1,0.0,0.0,1.0,0,HR,hard,sms,0,0.4853,careful
+398.0,1,1.0,0.0,0.0,0,HR,hard,sms,1,0.6865,hurried
+722.0,2,0.0,0.0,0.5,0,IT,medium,sms,1,0.1412,average
+3513.0,4,0.75,0.0,0.25,1,Finance,medium,email,0,0.2934,average
+881.0,2,1.0,1.0,0.0,0,Operations,medium,sms,1,0.7018,average
+2473.0,1,0.0,0.0,0.0,0,Sales,hard,sms,0,0.4268,careful
+1821.0,1,0.0,0.0,0.0,0,HR,hard,sms,0,0.4553,careful
+143.0,5,0.2,0.0,0.0,1,Finance,medium,email,0,0.1296,average
+2836.0,5,1.0,0.4,0.0,0,Sales,medium,email,0,0.6944,hurried
+1107.0,2,0.5,0.0,0.0,0,Finance,medium,sms,0,0.3334,careful
+3167.0,1,0.0,0.0,0.0,0,IT,hard,sms,1,0.3533,hurried
+273.0,3,1.0,0.0,0.3333333333333333,1,Sales,medium,sms,1,0.2138,high_risk
+337.0,1,0.0,0.0,0.0,0,Customer Support,hard,sms,1,0.4024,hurried
+1597.0,1,1.0,1.0,0.0,0,Sales,hard,sms,0,0.8377,average
+3254.0,2,1.0,0.5,0.0,0,IT,medium,sms,1,0.5398,hurried
+1801.0,2,1.0,0.0,0.0,0,Sales,medium,sms,0,0.4781,careful
+2985.0,3,0.3333333333333333,0.0,0.0,0,Operations,medium,sms,0,0.4022,careful
+3468.0,4,0.75,0.25,0.0,0,Finance,medium,email,0,0.6107,average
+1073.0,2,0.0,0.0,0.0,0,Finance,medium,sms,1,0.2171,average
+3155.0,3,0.3333333333333333,0.0,0.3333333333333333,0,Customer Support,medium,sms,1,0.4176,careful
+3425.0,4,0.25,0.25,0.25,1,IT,medium,email,0,0.1488,average
+36.0,2,0.5,0.0,0.0,0,Customer Support,medium,sms,0,0.3276,careful
+3570.0,4,0.75,0.5,0.0,0,Operations,medium,email,0,0.6881,careful
+2395.0,3,1.0,0.6666666666666666,0.0,1,Sales,medium,sms,0,0.3985,hurried
+567.0,4,0.25,0.25,0.0,0,Finance,medium,email,0,0.3646,careful
+2025.0,5,1.0,0.6,0.0,1,Customer Support,medium,email,0,0.4923,high_risk
+907.0,4,0.75,0.0,0.25,0,IT,medium,email,0,0.3485,average
+2065.0,2,0.5,0.0,0.0,0,IT,medium,sms,0,0.2603,average
+3377.0,4,0.75,0.25,0.0,0,Customer Support,medium,email,0,0.6379,average
+2032.0,2,0.5,0.0,0.0,0,Operations,medium,sms,0,0.388,average
+1428.0,3,1.0,0.3333333333333333,0.0,1,Operations,medium,sms,1,0.3393,hurried
+3594.0,4,0.5,0.25,0.25,1,Customer Support,medium,email,0,0.3085,hurried
+3119.0,2,1.0,0.0,0.0,0,Operations,medium,sms,0,0.5712,careful
+3297.0,2,0.5,0.0,0.0,0,IT,medium,sms,0,0.2961,average
+2681.0,5,0.6,0.2,0.0,0,Finance,medium,email,0,0.5577,careful
+993.0,2,0.5,0.0,0.0,0,Customer Support,medium,sms,0,0.3588,average
+1079.0,5,0.8,0.2,0.0,0,Customer Support,medium,email,0,0.5897,careful
+1482.0,2,0.5,0.0,0.0,0,Finance,medium,sms,1,0.3456,average
+3413.0,5,0.8,0.2,0.2,0,Sales,medium,email,0,0.6224,careful
+530.0,2,1.0,0.5,0.5,0,Operations,medium,sms,1,0.5932,average
+2046.0,1,1.0,1.0,0.0,0,Operations,hard,sms,1,0.8687,average
+1538.0,5,0.8,0.4,0.0,1,Customer Support,medium,email,0,0.3743,hurried
+,4,0.5,0.25,0.25,1,Operations,medium,email,0,0.2611,average
+1113.0,5,0.6,0.2,0.2,1,Operations,medium,email,0,0.2676,average
+1824.0,1,1.0,1.0,0.0,0,Operations,hard,sms,1,0.865,careful
+3239.0,2,1.0,0.0,0.0,0,Finance,medium,sms,0,0.5501,average
+3280.0,1,0.0,0.0,0.0,0,HR,hard,sms,0,0.5081,careful
+2828.0,3,0.6666666666666666,0.3333333333333333,0.0,1,Customer Support,medium,sms,0,0.3042,hurried
+2331.0,5,0.4,0.0,0.2,1,Sales,medium,email,0,0.1937,average
+1801.0,3,1.0,0.0,0.0,0,Sales,medium,sms,0,0.5071,careful
+351.0,3,1.0,0.3333333333333333,0.3333333333333333,0,Customer Support,medium,sms,0,0.5837,hurried
+592.0,4,0.0,0.0,0.25,1,Customer Support,medium,email,0,0.114,careful
+36.0,5,0.6,0.2,0.0,0,Customer Support,medium,email,0,0.4943,careful
+1987.0,2,1.0,0.5,0.0,0,Operations,medium,sms,0,0.6386,hurried
+859.0,3,1.0,0.3333333333333333,0.3333333333333333,0,Customer Support,medium,sms,1,0.6015,average
+1073.0,3,0.3333333333333333,0.3333333333333333,0.0,1,Finance,medium,sms,0,0.1679,average
+856.0,2,1.0,0.5,0.0,0,IT,medium,sms,0,0.453,average
+904.0,4,1.0,0.75,0.0,0,Sales,medium,email,1,0.6764,high_risk
+1655.0,3,1.0,0.3333333333333333,0.0,1,IT,medium,sms,0,0.2266,average
+1946.0,2,0.5,0.0,0.0,0,Operations,medium,sms,0,0.385,careful
+,3,0.3333333333333333,0.0,0.3333333333333333,1,Finance,medium,sms,0,0.1301,careful
+2090.0,5,0.8,0.0,0.4,0,Customer Support,medium,email,0,0.5856,average
+2929.0,4,0.75,0.0,0.25,1,Finance,medium,email,0,0.2761,careful
+1412.0,4,0.5,0.0,0.0,1,HR,medium,email,0,0.2049,careful
+1687.0,2,0.5,0.0,0.0,0,IT,medium,sms,0,0.2498,average
+1514.0,4,0.5,0.25,0.0,0,IT,medium,email,0,0.3506,hurried
+890.0,2,0.0,0.0,0.0,0,IT,medium,sms,0,0.1419,careful
+3153.0,4,0.75,0.25,0.0,0,Customer Support,medium,email,0,0.6303,average
+2214.0,1,1.0,0.0,0.0,0,Sales,hard,sms,0,0.6979,average
+1112.0,5,1.0,0.2,0.2,0,Sales,medium,email,1,0.5986,hurried
+462.0,5,0.8,0.6,0.2,1,Customer Support,medium,email,0,0.3814,high_risk
+1532.0,4,0.75,0.5,0.25,1,Sales,medium,email,0,0.3101,careful
+,4,1.0,0.25,0.25,0,HR,medium,email,0,0.6586,average
+3542.0,3,0.6666666666666666,0.3333333333333333,0.0,1,Sales,medium,sms,0,0.2823,average
+3570.0,2,1.0,0.5,0.0,0,Operations,medium,sms,0,0.6898,careful
+1687.0,1,0.0,0.0,0.0,0,IT,hard,sms,0,0.3059,average
+298.0,4,0.5,0.25,0.25,1,HR,medium,email,0,0.2168,average
+530.0,3,1.0,0.6666666666666666,0.3333333333333333,0,Operations,medium,sms,0,0.6538,average
+432.0,2,0.5,0.0,0.5,0,Operations,medium,sms,0,0.3388,average
+104.0,1,1.0,0.0,0.0,0,Operations,hard,sms,1,0.6713,average
+813.0,3,1.0,1.0,0.0,1,Customer Support,medium,sms,0,0.4666,high_risk
+98.0,2,0.0,0.0,0.5,0,HR,medium,sms,0,0.2184,average
+3162.0,3,1.0,0.3333333333333333,0.0,0,Operations,medium,sms,1,0.6697,hurried
+159.0,3,1.0,0.6666666666666666,0.0,1,Finance,medium,sms,1,0.3417,hurried
+2168.0,1,0.0,0.0,0.0,0,Operations,hard,sms,0,0.4611,careful
+2331.0,1,1.0,0.0,0.0,0,Sales,hard,sms,0,0.7014,average
+1777.0,4,0.75,0.25,0.0,1,Customer Support,medium,email,0,0.3126,average
+435.0,3,1.0,0.0,0.0,0,Operations,medium,sms,0,0.5034,careful
+881.0,1,1.0,1.0,0.0,0,Operations,hard,sms,1,0.8482,average
+1713.0,1,1.0,0.0,0.0,0,Finance,hard,sms,0,0.6994,careful
+3356.0,1,0.0,0.0,0.0,0,Operations,hard,sms,0,0.5041,careful
+,1,0.0,0.0,0.0,0,Finance,hard,sms,1,0.423,hurried
+3594.0,3,1.0,1.0,0.0,0,Operations,medium,sms,1,0.7966,hurried
+,2,0.5,0.5,0.0,0,IT,medium,sms,0,0.3264,average
+578.0,2,0.0,0.0,0.5,0,Customer Support,medium,sms,0,0.2304,careful
+328.0,3,0.0,0.0,0.3333333333333333,0,Finance,medium,sms,0,0.2206,careful
+3126.0,4,0.75,0.25,0.25,0,Sales,medium,email,0,0.5818,average
+1428.0,2,1.0,0.5,0.0,0,Operations,medium,sms,0,0.6197,hurried
+1638.0,1,1.0,0.0,1.0,0,Finance,hard,sms,0,0.7052,average
+3594.0,2,1.0,1.0,0.0,0,Sales,medium,sms,1,0.7438,hurried
+3630.0,1,0.0,0.0,0.0,0,Finance,hard,sms,1,0.4883,average
+3377.0,3,1.0,0.3333333333333333,0.0,0,Customer Support,medium,sms,0,0.6823,average
+1093.0,2,1.0,0.5,0.0,0,Operations,medium,sms,0,0.6082,average
+1275.0,1,0.0,0.0,0.0,0,Sales,hard,sms,0,0.3849,careful
+3592.0,1,0.0,0.0,0.0,0,IT,hard,sms,0,0.3675,careful
+1987.0,1,1.0,0.0,0.0,0,Operations,hard,sms,1,0.7286,hurried
+2408.0,2,1.0,0.0,0.0,0,Operations,medium,sms,0,0.5458,careful
+418.0,5,0.6,0.2,0.2,0,HR,medium,email,1,0.5104,average
+297.0,5,0.6,0.2,0.4,0,Customer Support,medium,email,1,0.5077,hurried
+3003.0,5,0.6,0.4,0.0,0,IT,medium,email,0,0.4917,hurried
+35.0,2,0.5,0.5,0.5,0,HR,medium,sms,1,0.4373,careful
+2162.0,2,0.0,0.0,0.5,0,Customer Support,medium,sms,0,0.2736,average
+104.0,5,0.8,0.4,0.2,0,Operations,medium,email,0,0.5942,average
+981.0,2,0.5,0.5,0.0,0,Operations,medium,sms,0,0.4597,average
+355.0,1,1.0,0.0,1.0,0,Sales,hard,sms,1,0.647,hurried
+1286.0,4,0.25,0.0,0.25,0,Customer Support,medium,email,0,0.3692,careful
+2474.0,4,0.25,0.0,0.25,1,Finance,medium,email,0,0.166,careful
+3567.0,5,0.4,0.0,0.0,0,Sales,medium,email,0,0.467,average
+2062.0,5,0.8,0.4,0.4,0,HR,medium,email,0,0.6683,average
+1182.0,3,0.6666666666666666,0.0,0.0,0,Sales,medium,sms,0,0.389,careful
+3297.0,4,0.25,0.25,0.5,0,Operations,medium,email,0,0.4907,careful
+3197.0,4,1.0,0.5,0.25,1,Finance,medium,email,1,0.4537,hurried
+47.0,2,0.0,0.0,0.5,0,HR,medium,sms,0,0.2172,careful
+649.0,4,1.0,0.75,0.0,0,HR,medium,email,1,0.7131,high_risk
+3166.0,1,0.0,0.0,0.0,0,IT,hard,sms,1,0.3532,careful
+2752.0,4,1.0,1.0,0.0,1,Operations,medium,email,0,0.572,high_risk
+535.0,5,0.2,0.0,0.2,1,HR,medium,email,1,0.1532,average
+3320.0,5,0.6,0.2,0.0,0,HR,medium,email,0,0.6118,careful
+3195.0,2,0.5,0.5,0.0,0,Operations,medium,sms,0,0.5399,average
+2933.0,3,0.6666666666666666,0.0,0.3333333333333333,0,HR,medium,sms,1,0.5065,careful
+530.0,5,0.8,0.4,0.2,0,Operations,medium,email,0,0.6091,average
+438.0,5,0.8,0.0,0.2,1,IT,medium,email,0,0.162,average
+1898.0,2,0.0,0.0,0.5,0,IT,medium,sms,1,0.1632,average
+2147.0,4,0.75,0.25,0.0,1,Operations,medium,email,0,0.3186,hurried
+578.0,4,0.0,0.0,0.25,1,Customer Support,medium,email,0,0.1138,careful
+138.0,5,1.0,0.4,0.0,0,Finance,medium,email,0,0.6247,hurried
