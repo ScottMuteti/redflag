@@ -1,7 +1,10 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
+const crypto = require('crypto');
 const { authenticate, authorize } = require('../../middleware/auth');
 const db = require('../../config/db');
+const { parseCsv } = require('../../lib/csv');
+const { isValidEmail, normalizeKenyanPhone } = require('../../lib/validation');
 
 const router = express.Router();
 const SALT_ROUNDS = 10;
@@ -92,6 +95,102 @@ router.post('/', authorize('admin'), async (req, res, next) => {
     }
     return next(err);
   }
+});
+
+// Bulk import from a CSV string. Columns (case/space-insensitive): fullName,
+// email, phoneNumber, jobTitle, hireDate, department. Every row is validated
+// server-side; valid rows are inserted and rejected rows are reported with a
+// reason and line number, so the admin can fix and re-upload. Each new employee
+// gets a random initial password (they reset it on first login).
+router.post('/import', authorize('admin'), async (req, res, next) => {
+  const csv = req.body?.csv;
+  if (typeof csv !== 'string' || !csv.trim()) {
+    return res.status(400).json({ message: 'csv (text) is required' });
+  }
+
+  let records;
+  try {
+    records = parseCsv(csv);
+  } catch {
+    return res.status(400).json({ message: 'Could not parse the CSV' });
+  }
+  if (records.length === 0) return res.status(400).json({ message: 'No data rows found' });
+  if (records.length > 2000) {
+    return res.status(400).json({ message: 'Too many rows (max 2000 per import)' });
+  }
+
+  const rejected = [];
+  const valid = [];
+  const seenEmails = new Set();
+
+  records.forEach((rec, index) => {
+    const line = index + 2; // +1 for header, +1 for 1-based
+    const fullName = rec.fullname || rec.name;
+    const email = (rec.email || '').toLowerCase();
+    const reject = (reason) => rejected.push({ line, email: rec.email || null, reason });
+
+    if (!fullName) return reject('Missing fullName');
+    if (!isValidEmail(email)) return reject('Invalid or missing email');
+    if (seenEmails.has(email)) return reject('Duplicate email within the file');
+
+    const phone = normalizeKenyanPhone(rec.phonenumber || rec.phone);
+    if (!phone.ok) return reject('Invalid Kenyan phone number');
+
+    let hireDate = rec.hiredate || null;
+    if (hireDate && Number.isNaN(Date.parse(hireDate))) return reject('Invalid hireDate');
+
+    seenEmails.add(email);
+    valid.push({
+      fullName,
+      email,
+      phoneNumber: phone.value,
+      jobTitle: rec.jobtitle || rec.title || null,
+      hireDate: hireDate || null,
+      departmentName: rec.department || rec.departmentname || null,
+    });
+  });
+
+  if (valid.length === 0) {
+    return res.status(422).json({ inserted: 0, rejected, message: 'No valid rows to import' });
+  }
+
+  const client = await db.getClient();
+  const inserted = [];
+  try {
+    await client.query('BEGIN');
+    for (const row of valid) {
+      let departmentId = null;
+      if (row.departmentName) {
+        const { rows } = await client.query(
+          `INSERT INTO departments (organization_id, name) VALUES ($1, $2)
+           ON CONFLICT (organization_id, name) DO UPDATE SET name = EXCLUDED.name RETURNING id`,
+          [req.user.organizationId, row.departmentName],
+        );
+        departmentId = rows[0].id;
+      }
+      const passwordHash = await bcrypt.hash(crypto.randomBytes(12).toString('base64url'), SALT_ROUNDS);
+      // ON CONFLICT DO NOTHING rather than catch-and-continue: a raised unique
+      // violation would abort the whole transaction in Postgres.
+      const { rows } = await client.query(
+        `INSERT INTO employees
+           (organization_id, department_id, full_name, email, phone_number, job_title, hire_date, password_hash)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         ON CONFLICT (email) DO NOTHING
+         RETURNING id, full_name AS "fullName", email`,
+        [req.user.organizationId, departmentId, row.fullName, row.email, row.phoneNumber, row.jobTitle, row.hireDate, passwordHash],
+      );
+      if (rows[0]) inserted.push(rows[0]);
+      else rejected.push({ line: null, email: row.email, reason: 'Email already exists' });
+    }
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    return next(err);
+  } finally {
+    client.release();
+  }
+
+  return res.status(201).json({ inserted: inserted.length, rejected, employees: inserted });
 });
 
 router.get('/:id', async (req, res, next) => {

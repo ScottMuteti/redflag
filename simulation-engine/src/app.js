@@ -17,6 +17,8 @@ app.use(helmet());
 app.use(cors());
 app.use(
   express.json({
+    // 1 MB covers a CSV roster import; larger payloads are rejected with 413.
+    limit: '1mb',
     verify: (req, res, buf) => {
       req.rawBody = buf;
     },
