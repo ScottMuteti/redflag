@@ -15,25 +15,19 @@ const CampaignsPage = lazy(() => import('../pages/admin/CampaignsPage'));
 const EmployeesPage = lazy(() => import('../pages/admin/EmployeesPage'));
 const EmployeeOverviewPage = lazy(() => import('../pages/employee/EmployeeOverviewPage'));
 const MyTrainingPage = lazy(() => import('../pages/employee/MyTrainingPage'));
+const NewCampaignPage = lazy(() => import('../pages/admin/NewCampaignPage'));
+const CampaignResultsPage = lazy(() => import('../pages/admin/CampaignResultsPage'));
+const TrainingPage = lazy(() => import('../pages/admin/TrainingPage'));
+const AnalyticsPage = lazy(() => import('../pages/admin/AnalyticsPage'));
+const ReportsPage = lazy(() => import('../pages/admin/ReportsPage'));
+const TrainingPlayerPage = lazy(() => import('../pages/employee/TrainingPlayerPage'));
+const QuizzesPage = lazy(() => import('../pages/employee/QuizzesPage'));
+const MyReportsPage = lazy(() => import('../pages/employee/MyReportsPage'));
+const SettingsPage = lazy(() => import('../pages/SettingsPage'));
+const HelpPage = lazy(() => import('../pages/HelpPage'));
 
 // Sections not built yet render a "coming soon" page inside the shell instead of a 404.
-const ADMIN_SOON = [
-  ['templates', 'Templates', 'Kenya-specific attack scenarios'],
-  ['training', 'Training', 'Remedial training and quizzes'],
-  ['analytics', 'Analytics', 'Trends across campaigns and departments'],
-  ['reports', 'Reports', 'Exports for leadership and audit'],
-  ['settings', 'Settings', 'Your account and organisation'],
-  ['help', 'Help Center', 'Guides and answers'],
-  ['campaigns/new', 'New campaign', 'Set up a simulated attack'],
-  ['campaigns/:id', 'Campaign results', 'Outcomes per employee'],
-];
-
-const EMPLOYEE_SOON = [
-  ['quizzes', 'Quizzes', 'Check what you’ve learned'],
-  ['reports', 'Reports Sent', 'Suspicious messages you flagged'],
-  ['settings', 'Settings', 'Your account'],
-  ['help', 'Help Center', 'Guides and answers'],
-];
+const ADMIN_SOON = [['templates', 'Templates', 'Kenya-specific attack scenarios']];
 
 function AppRouter() {
   return (
@@ -54,7 +48,14 @@ function AppRouter() {
         >
           <Route index element={<OverviewPage />} />
           <Route path="campaigns" element={<CampaignsPage />} />
+          <Route path="campaigns/new" element={<NewCampaignPage />} />
+          <Route path="campaigns/:id" element={<CampaignResultsPage />} />
           <Route path="employees" element={<EmployeesPage />} />
+          <Route path="training" element={<TrainingPage />} />
+          <Route path="analytics" element={<AnalyticsPage />} />
+          <Route path="reports" element={<ReportsPage />} />
+          <Route path="settings" element={<SettingsPage />} />
+          <Route path="help" element={<HelpPage role="admin" />} />
           {ADMIN_SOON.map(([path, title, description]) => (
             <Route
               key={path}
@@ -74,13 +75,11 @@ function AppRouter() {
         >
           <Route index element={<EmployeeOverviewPage />} />
           <Route path="training" element={<MyTrainingPage />} />
-          {EMPLOYEE_SOON.map(([path, title, description]) => (
-            <Route
-              key={path}
-              path={path}
-              element={<ComingSoonPage title={title} description={description} backTo="/portal" />}
-            />
-          ))}
+          <Route path="training/:id" element={<TrainingPlayerPage />} />
+          <Route path="quizzes" element={<QuizzesPage />} />
+          <Route path="reports" element={<MyReportsPage />} />
+          <Route path="settings" element={<SettingsPage />} />
+          <Route path="help" element={<HelpPage role="employee" />} />
         </Route>
 
         <Route path="*" element={<StatusPage code={404} />} />

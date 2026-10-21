@@ -153,7 +153,7 @@ router.get('/employee/:id', async (req, res, next) => {
   }
 
   try {
-    const [scoreResult, attemptsResult, assignmentsResult] = await Promise.all([
+    const [scoreResult, attemptsResult, assignmentsResult, reportsResult] = await Promise.all([
       db.query(
         `SELECT score, risk_level AS "riskLevel", computed_at AS "computedAt"
          FROM susceptibility_scores
@@ -176,6 +176,11 @@ router.get('/employee/:id', async (req, res, next) => {
          WHERE training_assignments.employee_id = $1 AND employees.organization_id = $2`,
         [employeeId, req.user.organizationId],
       ),
+      db.query(
+        `SELECT COUNT(*) AS total, COUNT(attempt_id) AS matched
+         FROM phishing_reports WHERE employee_id = $1 AND organization_id = $2`,
+        [employeeId, req.user.organizationId],
+      ),
     ]);
 
     return res.json({
@@ -189,7 +194,43 @@ router.get('/employee/:id', async (req, res, next) => {
         totalAssignments: Number(assignmentsResult.rows[0].total),
         completedAssignments: Number(assignmentsResult.rows[0].completed),
       },
+      reports: {
+        total: Number(reportsResult.rows[0]?.total || 0),
+        matchedSimulations: Number(reportsResult.rows[0]?.matched || 0),
+      },
     });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// Lowest and highest employee score (0–100) per day, week or month.
+const RANGE_PERIODS = {
+  daily: { unit: 'day', since: '7 days' },
+  weekly: { unit: 'week', since: '8 weeks' },
+  monthly: { unit: 'month', since: '6 months' },
+};
+
+router.get('/score-ranges', authorize('admin'), async (req, res, next) => {
+  const period = RANGE_PERIODS[req.query.period] || RANGE_PERIODS.weekly;
+  try {
+    const { rows } = await db.query(
+      `SELECT date_trunc($2, susceptibility_scores.computed_at) AS bucket,
+         MIN(susceptibility_scores.score) AS min, MAX(susceptibility_scores.score) AS max
+       FROM susceptibility_scores
+       JOIN employees ON employees.id = susceptibility_scores.employee_id
+       WHERE employees.organization_id = $1
+         AND susceptibility_scores.computed_at >= now() - $3::interval
+       GROUP BY bucket ORDER BY bucket`,
+      [req.user.organizationId, period.unit, period.since],
+    );
+    return res.json(
+      rows.map((row) => ({
+        bucket: row.bucket,
+        min: Math.round(Number(row.min) * 100),
+        max: Math.round(Number(row.max) * 100),
+      })),
+    );
   } catch (err) {
     return next(err);
   }

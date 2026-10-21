@@ -10,7 +10,8 @@
     "start": "node src/index.js",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "test": "jest"
+    "test": "jest",
+    "seed:demo": "node src/db/seed-demo.js"
   },
   "dependencies": {
     "africastalking": "^0.7.0",

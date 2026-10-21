@@ -7,3 +7,7 @@ export function getOrganizationAnalytics() {
 export function getEmployeeAnalytics(employeeId) {
   return apiClient.get(`/analytics/employee/${employeeId}`).then((res) => res.data);
 }
+
+export function getScoreRanges(period) {
+  return apiClient.get('/analytics/score-ranges', { params: { period } }).then((res) => res.data);
+}

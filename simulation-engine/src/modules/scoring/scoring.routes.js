@@ -99,4 +99,59 @@ router.get('/employee/:employeeId', async (req, res, next) => {
   }
 });
 
+// Scores every employee in the org; failures for individual employees are counted, not fatal.
+router.post('/compute-all', authorize('admin'), async (req, res, next) => {
+  try {
+    const { rows: employees } = await db.query(
+      'SELECT id FROM employees WHERE organization_id = $1',
+      [req.user.organizationId],
+    );
+    let scored = 0;
+    let failed = 0;
+    for (const { id } of employees) {
+      try {
+        const features = await loadEmployeeFeatures(id, req.user.organizationId);
+        const { data } = await axios.post(`${env.mlServiceUrl}/predict`, features);
+        await db.query(
+          `INSERT INTO susceptibility_scores (employee_id, score, risk_level, model_version)
+           VALUES ($1, $2, $3, $4)`,
+          [id, data.score, data.risk_level, data.model_version],
+        );
+        scored += 1;
+      } catch (err) {
+        if (err.response?.status === 503) {
+          return res.status(503).json({ message: 'Scoring model is not trained yet' });
+        }
+        failed += 1;
+      }
+    }
+    return res.json({ scored, failed });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+router.get('/employee/:employeeId/history', async (req, res, next) => {
+  const employeeId = Number(req.params.employeeId);
+  if (req.user.role === 'employee' && req.user.sub !== employeeId) {
+    return res.status(403).json({ message: 'Forbidden' });
+  }
+
+  try {
+    const { rows } = await db.query(
+      `SELECT susceptibility_scores.score, susceptibility_scores.risk_level AS "riskLevel",
+         susceptibility_scores.computed_at AS "computedAt"
+       FROM susceptibility_scores
+       JOIN employees ON employees.id = susceptibility_scores.employee_id
+       WHERE susceptibility_scores.employee_id = $1 AND employees.organization_id = $2
+       ORDER BY susceptibility_scores.computed_at DESC
+       LIMIT 20`,
+      [employeeId, req.user.organizationId],
+    );
+    return res.json(rows.reverse());
+  } catch (err) {
+    return next(err);
+  }
+});
+
 module.exports = router;

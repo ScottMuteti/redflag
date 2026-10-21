@@ -61,4 +61,17 @@ async function getCampaignResults(gophishCampaignId) {
   return data;
 }
 
-module.exports = { createGroup, createTemplate, createLandingPage, createCampaign, getCampaignResults };
+// Marks the campaign complete in Gophish so it stops tracking new events.
+async function completeCampaign(gophishCampaignId) {
+  const { data } = await client.get(`/api/campaigns/${gophishCampaignId}/complete`);
+  return data;
+}
+
+module.exports = {
+  createGroup,
+  createTemplate,
+  createLandingPage,
+  createCampaign,
+  getCampaignResults,
+  completeCampaign,
+};

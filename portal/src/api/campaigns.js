@@ -29,3 +29,19 @@ export function launchCampaign(id, departmentId) {
 export function getCampaignResults(id) {
   return apiClient.get(`/campaigns/${id}/results`).then((res) => res.data);
 }
+
+export function createTemplate(payload) {
+  return apiClient.post('/campaigns/templates', payload).then((res) => res.data);
+}
+
+export function resetTemplate(key) {
+  return apiClient.delete(`/campaigns/templates/${key}`);
+}
+
+export function stopCampaign(id) {
+  return apiClient.post(`/campaigns/${id}/stop`).then((res) => res.data);
+}
+
+export function deleteCampaign(id) {
+  return apiClient.delete(`/campaigns/${id}`);
+}

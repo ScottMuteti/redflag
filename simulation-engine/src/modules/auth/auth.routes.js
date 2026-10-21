@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const rateLimit = require('express-rate-limit');
 const db = require('../../config/db');
 const env = require('../../config/env');
+const { authenticate, authorize } = require('../../middleware/auth');
 
 const router = express.Router();
 const SALT_ROUNDS = 10;
@@ -104,6 +105,88 @@ router.post('/login', loginLimiter, async (req, res, next) => {
       user: { id: user.id, fullName: user.full_name, email: user.email, role: user.role, organizationId: user.organization_id },
     });
   } catch (err) {
+    return next(err);
+  }
+});
+
+const tableFor = (role) => (role === 'admin' ? 'admin_users' : 'employees');
+
+router.get('/me', authenticate, async (req, res, next) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT u.id, u.full_name AS "fullName", u.email, u.role, u.organization_id AS "organizationId",
+         organizations.name AS "organizationName", organizations.industry, organizations.county
+       FROM ${tableFor(req.user.role)} u
+       JOIN organizations ON organizations.id = u.organization_id
+       WHERE u.id = $1`,
+      [req.user.sub],
+    );
+    if (rows.length === 0) return res.status(404).json({ message: 'User not found' });
+    return res.json(rows[0]);
+  } catch (err) {
+    return next(err);
+  }
+});
+
+router.put('/me', authenticate, async (req, res, next) => {
+  const { fullName } = req.body;
+  if (!fullName || !fullName.trim()) return res.status(400).json({ message: 'fullName is required' });
+
+  try {
+    const { rows } = await db.query(
+      `UPDATE ${tableFor(req.user.role)} SET full_name = $1 WHERE id = $2
+       RETURNING id, full_name AS "fullName", email, role, organization_id AS "organizationId"`,
+      [fullName.trim(), req.user.sub],
+    );
+    if (rows.length === 0) return res.status(404).json({ message: 'User not found' });
+    return res.json(rows[0]);
+  } catch (err) {
+    return next(err);
+  }
+});
+
+router.put('/password', authenticate, async (req, res, next) => {
+  const { currentPassword, newPassword } = req.body;
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ message: 'currentPassword and newPassword are required' });
+  }
+  if (newPassword.length < 8) {
+    return res.status(400).json({ message: 'newPassword must be at least 8 characters' });
+  }
+
+  try {
+    const table = tableFor(req.user.role);
+    const { rows } = await db.query(`SELECT password_hash FROM ${table} WHERE id = $1`, [
+      req.user.sub,
+    ]);
+    if (rows.length === 0) return res.status(404).json({ message: 'User not found' });
+    const matches = await bcrypt.compare(currentPassword, rows[0].password_hash);
+    if (!matches) return res.status(400).json({ message: 'Current password is incorrect' });
+
+    const passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+    await db.query(`UPDATE ${table} SET password_hash = $1 WHERE id = $2`, [
+      passwordHash,
+      req.user.sub,
+    ]);
+    return res.status(204).send();
+  } catch (err) {
+    return next(err);
+  }
+});
+
+router.put('/organization', authenticate, authorize('admin'), async (req, res, next) => {
+  const { name, industry, county } = req.body;
+  if (!name || !name.trim()) return res.status(400).json({ message: 'name is required' });
+
+  try {
+    const { rows } = await db.query(
+      `UPDATE organizations SET name = $1, industry = $2, county = $3, updated_at = now()
+       WHERE id = $4 RETURNING id, name, industry, county`,
+      [name.trim(), industry || null, county || null, req.user.organizationId],
+    );
+    return res.json(rows[0]);
+  } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ message: 'name is already taken' });
     return next(err);
   }
 });

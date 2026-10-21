@@ -136,7 +136,7 @@ describe('campaigns routes', () => {
       .send({ body: 'Custom {{link}}' });
 
     expect(res.statusCode).toBe(200);
-    expect(db.query.mock.calls[0][1]).toEqual([1, 'mpesa-alert', null, 'Custom {{link}}']);
+    expect(db.query.mock.calls[0][1]).toEqual([1, 'mpesa-alert', null, 'Custom {{link}}', null]);
   });
 });
 

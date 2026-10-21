@@ -13,8 +13,16 @@ const requireAdmin = [authenticate, authorize('admin')];
 const CAMPAIGN_COLUMNS = `
   id, name, type, template_key AS "templateKey", difficulty_level AS "difficultyLevel",
   status, gophish_campaign_id AS "gophishCampaignId", scheduled_at AS "scheduledAt",
+  department_id AS "departmentId", launched_at AS "launchedAt", completed_at AS "completedAt",
   created_at AS "createdAt"
 `;
+
+const TEMPLATE_COLUMNS = `
+  id, type, key, name, subject, body, category, difficulty_level AS "difficultyLevel",
+  organization_id IS NOT NULL AS "isCustom"
+`;
+
+const DIFFICULTIES = ['easy', 'medium', 'hard'];
 
 const EVENT_COLUMN = {
   'Email Sent': 'sent_at',
@@ -70,8 +78,11 @@ router.get('/templates', ...requireAdmin, async (req, res, next) => {
   try {
     // An org's customised copy of a template overrides the global default with the same key.
     const { rows } = await db.query(
-      `SELECT DISTINCT ON (key) id, type, key, name, subject, body, category,
-         organization_id IS NOT NULL AS "isCustom"
+      `SELECT DISTINCT ON (key) ${TEMPLATE_COLUMNS},
+         EXISTS (
+           SELECT 1 FROM campaign_templates d
+           WHERE d.key = campaign_templates.key AND d.organization_id IS NULL
+         ) AS "hasDefault"
        FROM campaign_templates
        WHERE organization_id IS NULL OR organization_id = $1
        ORDER BY key, organization_id NULLS LAST`,
@@ -87,20 +98,86 @@ router.get('/templates', ...requireAdmin, async (req, res, next) => {
 
 // Saves an org-level copy of a template; the global default stays untouched.
 router.put('/templates/:key', ...requireAdmin, async (req, res, next) => {
-  const { subject, body } = req.body;
+  const { subject, body, difficultyLevel } = req.body;
   if (!body) return res.status(400).json({ message: 'body is required' });
+  if (difficultyLevel && !DIFFICULTIES.includes(difficultyLevel)) {
+    return res.status(400).json({ message: 'difficultyLevel must be easy, medium or hard' });
+  }
 
   try {
     const { rows } = await db.query(
-      `INSERT INTO campaign_templates (organization_id, type, key, name, subject, body, category)
-       SELECT $1, type, key, name, $3, $4, category
-       FROM campaign_templates WHERE key = $2 AND organization_id IS NULL
-       ON CONFLICT (organization_id, key) DO UPDATE SET subject = EXCLUDED.subject, body = EXCLUDED.body
-       RETURNING id, type, key, name, subject, body, category, true AS "isCustom"`,
-      [req.user.organizationId, req.params.key, subject || null, body],
+      `INSERT INTO campaign_templates
+         (organization_id, type, key, name, subject, body, category, difficulty_level)
+       SELECT $1, type, key, name, $3, $4, category, COALESCE($5, difficulty_level)
+       FROM campaign_templates
+       WHERE key = $2 AND (organization_id IS NULL OR organization_id = $1)
+       ORDER BY organization_id NULLS LAST LIMIT 1
+       ON CONFLICT (organization_id, key) DO UPDATE SET subject = EXCLUDED.subject,
+         body = EXCLUDED.body, difficulty_level = EXCLUDED.difficulty_level
+       RETURNING ${TEMPLATE_COLUMNS}`,
+      [req.user.organizationId, req.params.key, subject || null, body, difficultyLevel || null],
     );
     if (rows.length === 0) return res.status(404).json({ message: 'Template not found' });
     return res.json(rows[0]);
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// New org-only template.
+router.post('/templates', ...requireAdmin, async (req, res, next) => {
+  const { type, name, subject, body, category, difficultyLevel } = req.body;
+  if (!type || !name || !body) {
+    return res.status(400).json({ message: 'type, name and body are required' });
+  }
+  if (!['email', 'sms'].includes(type)) {
+    return res.status(400).json({ message: 'type must be email or sms' });
+  }
+  if (type === 'email' && !subject) {
+    return res.status(400).json({ message: 'subject is required for email templates' });
+  }
+  if (difficultyLevel && !DIFFICULTIES.includes(difficultyLevel)) {
+    return res.status(400).json({ message: 'difficultyLevel must be easy, medium or hard' });
+  }
+  const slug = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 60);
+  const key = `${slug || 'template'}-${crypto.randomBytes(3).toString('hex')}`;
+
+  try {
+    const { rows } = await db.query(
+      `INSERT INTO campaign_templates
+         (organization_id, type, key, name, subject, body, category, difficulty_level)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING ${TEMPLATE_COLUMNS}`,
+      [
+        req.user.organizationId,
+        type,
+        key,
+        name,
+        type === 'email' ? subject : null,
+        body,
+        category || null,
+        difficultyLevel || 'medium',
+      ],
+    );
+    return res.status(201).json(rows[0]);
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// Removes the org's copy: a customised default reverts, an org-only template is deleted.
+router.delete('/templates/:key', ...requireAdmin, async (req, res, next) => {
+  try {
+    const { rowCount } = await db.query(
+      'DELETE FROM campaign_templates WHERE key = $1 AND organization_id = $2',
+      [req.params.key, req.user.organizationId],
+    );
+    if (rowCount === 0) return res.status(404).json({ message: 'No custom template to remove' });
+    return res.status(204).send();
   } catch (err) {
     return next(err);
   }
@@ -198,7 +275,7 @@ router.get('/', ...requireAdmin, async (req, res, next) => {
 });
 
 router.post('/', ...requireAdmin, async (req, res, next) => {
-  const { name, type, templateKey, difficultyLevel, scheduledAt } = req.body;
+  const { name, type, templateKey, difficultyLevel, scheduledAt, departmentId } = req.body;
   if (!name || !type || !templateKey) {
     return res.status(400).json({ message: 'name, type and templateKey are required' });
   }
@@ -208,12 +285,24 @@ router.post('/', ...requireAdmin, async (req, res, next) => {
   if (scheduledAt && Number.isNaN(Date.parse(scheduledAt))) {
     return res.status(400).json({ message: 'scheduledAt must be a valid date' });
   }
+  if (difficultyLevel && !DIFFICULTIES.includes(difficultyLevel)) {
+    return res.status(400).json({ message: 'difficultyLevel must be easy, medium or hard' });
+  }
 
   try {
+    if (departmentId) {
+      const { rows: deptRows } = await db.query(
+        'SELECT id FROM departments WHERE id = $1 AND organization_id = $2',
+        [departmentId, req.user.organizationId],
+      );
+      if (deptRows.length === 0) return res.status(400).json({ message: 'Unknown departmentId' });
+    }
+
     const { rows } = await db.query(
       `INSERT INTO simulation_campaigns
-         (organization_id, created_by, name, type, template_key, difficulty_level, status, scheduled_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         (organization_id, created_by, name, type, template_key, difficulty_level, status,
+          scheduled_at, department_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING ${CAMPAIGN_COLUMNS}`,
       [
         req.user.organizationId,
@@ -224,6 +313,7 @@ router.post('/', ...requireAdmin, async (req, res, next) => {
         difficultyLevel || 'medium',
         scheduledAt ? 'scheduled' : 'draft',
         scheduledAt || null,
+        departmentId || null,
       ],
     );
     return res.status(201).json(rows[0]);
@@ -235,7 +325,10 @@ router.post('/', ...requireAdmin, async (req, res, next) => {
 router.get('/:id', ...requireAdmin, async (req, res, next) => {
   try {
     const { rows } = await db.query(
-      `SELECT ${CAMPAIGN_COLUMNS} FROM simulation_campaigns WHERE id = $1 AND organization_id = $2`,
+      `SELECT ${CAMPAIGN_COLUMNS},
+         (SELECT name FROM departments WHERE departments.id = simulation_campaigns.department_id)
+           AS "departmentName"
+       FROM simulation_campaigns WHERE id = $1 AND organization_id = $2`,
       [req.params.id, req.user.organizationId],
     );
     if (rows.length === 0) return res.status(404).json({ message: 'Campaign not found' });
@@ -268,22 +361,32 @@ async function launchCampaign(campaign, organizationId, departmentId) {
   if (employees.length === 0) throw new LaunchError(400, 'No employees to target');
 
   if (campaign.type === 'email') {
-    const group = await gophishClient.createGroup(`redflag-${campaign.id}`, employees);
-    const gophishTemplate = await gophishClient.createTemplate(
-      `redflag-${campaign.id}`,
-      template.subject,
-      template.body,
-    );
-    const gophishCampaign = await gophishClient.createCampaign({
-      name: `redflag-${campaign.id}-${campaign.name}`,
-      groupName: group.name,
-      templateName: gophishTemplate.name,
-      pageName: env.gophish.landingPage,
-      url: env.gophish.phishUrl,
-    });
+    let gophishCampaign;
+    try {
+      const group = await gophishClient.createGroup(`redflag-${campaign.id}`, employees);
+      const gophishTemplate = await gophishClient.createTemplate(
+        `redflag-${campaign.id}`,
+        template.subject,
+        template.body,
+      );
+      gophishCampaign = await gophishClient.createCampaign({
+        name: `redflag-${campaign.id}-${campaign.name}`,
+        groupName: group.name,
+        templateName: gophishTemplate.name,
+        pageName: env.gophish.landingPage,
+        url: env.gophish.phishUrl,
+      });
+    } catch (err) {
+      throw new LaunchError(
+        502,
+        'Gophish is not reachable or not set up',
+        err.response?.data?.message || err.message,
+      );
+    }
 
     await db.query(
-      'UPDATE simulation_campaigns SET status = $1, gophish_campaign_id = $2 WHERE id = $3',
+      `UPDATE simulation_campaigns SET status = $1, gophish_campaign_id = $2, launched_at = now()
+       WHERE id = $3`,
       ['running', gophishCampaign.id, campaign.id],
     );
 
@@ -337,10 +440,10 @@ async function launchCampaign(campaign, organizationId, departmentId) {
       throw new LaunchError(502, 'Failed to send any SMS messages', firstFailure.reason?.message);
     }
 
-    await db.query('UPDATE simulation_campaigns SET status = $1 WHERE id = $2', [
-      'running',
-      campaign.id,
-    ]);
+    await db.query(
+      'UPDATE simulation_campaigns SET status = $1, launched_at = now() WHERE id = $2',
+      ['running', campaign.id],
+    );
     return `Campaign launched (${sentCount}/${targeted.length} messages sent)`;
   }
 
@@ -355,7 +458,7 @@ async function launchDueCampaigns() {
   );
   for (const campaign of rows) {
     try {
-      await launchCampaign(campaign, campaign.organizationId);
+      await launchCampaign(campaign, campaign.organizationId, campaign.departmentId);
     } catch (err) {
       // Back to draft so a failing launch isn't retried every tick; admin can relaunch manually.
       await db.query("UPDATE simulation_campaigns SET status = 'draft' WHERE id = $1", [
@@ -378,12 +481,68 @@ router.post('/:id/launch', ...requireAdmin, async (req, res, next) => {
       return res.status(409).json({ message: `Campaign is already ${campaign.status}` });
     }
 
-    const message = await launchCampaign(campaign, req.user.organizationId, req.body.departmentId);
+    const message = await launchCampaign(
+      campaign,
+      req.user.organizationId,
+      req.body.departmentId || campaign.departmentId,
+    );
     return res.json({ message });
   } catch (err) {
     if (err instanceof LaunchError) {
       return res.status(err.status).json({ message: err.message, detail: err.detail });
     }
+    return next(err);
+  }
+});
+
+// Ends a running campaign (or unschedules a scheduled one). A Gophish failure is logged, not fatal.
+router.post('/:id/stop', ...requireAdmin, async (req, res, next) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT ${CAMPAIGN_COLUMNS} FROM simulation_campaigns WHERE id = $1 AND organization_id = $2`,
+      [req.params.id, req.user.organizationId],
+    );
+    if (rows.length === 0) return res.status(404).json({ message: 'Campaign not found' });
+    const campaign = rows[0];
+    if (!['running', 'scheduled'].includes(campaign.status)) {
+      return res.status(409).json({ message: `Campaign is ${campaign.status}` });
+    }
+
+    if (campaign.type === 'email' && campaign.gophishCampaignId) {
+      try {
+        await gophishClient.completeCampaign(campaign.gophishCampaignId);
+      } catch (err) {
+        console.error(`Gophish stop for campaign ${campaign.id} failed: ${err.message}`);
+      }
+    }
+
+    const updateQuery =
+      campaign.status === 'scheduled'
+        ? `UPDATE simulation_campaigns SET status = 'draft', scheduled_at = NULL
+           WHERE id = $1 RETURNING ${CAMPAIGN_COLUMNS}`
+        : `UPDATE simulation_campaigns SET status = 'completed', completed_at = now()
+           WHERE id = $1 RETURNING ${CAMPAIGN_COLUMNS}`;
+    const { rows: updated } = await db.query(updateQuery, [campaign.id]);
+    return res.json(updated[0]);
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// Only drafts can be deleted; launched campaigns keep their history.
+router.delete('/:id', ...requireAdmin, async (req, res, next) => {
+  try {
+    const { rows } = await db.query(
+      'SELECT status FROM simulation_campaigns WHERE id = $1 AND organization_id = $2',
+      [req.params.id, req.user.organizationId],
+    );
+    if (rows.length === 0) return res.status(404).json({ message: 'Campaign not found' });
+    if (rows[0].status !== 'draft') {
+      return res.status(409).json({ message: 'Only draft campaigns can be deleted' });
+    }
+    await db.query('DELETE FROM simulation_campaigns WHERE id = $1', [req.params.id]);
+    return res.status(204).send();
+  } catch (err) {
     return next(err);
   }
 });
@@ -398,12 +557,14 @@ router.get('/:id/results', ...requireAdmin, async (req, res, next) => {
 
     const { rows } = await db.query(
       `SELECT employees.id AS "employeeId", employees.full_name AS "employeeName",
+              employees.email, departments.name AS "departmentName",
               simulation_attempts.sent_at AS "sentAt", simulation_attempts.opened_at AS "openedAt",
               simulation_attempts.clicked_at AS "clickedAt",
               simulation_attempts.submitted_credentials_at AS "submittedCredentialsAt",
               simulation_attempts.reported_at AS "reportedAt"
        FROM simulation_attempts
        JOIN employees ON employees.id = simulation_attempts.employee_id
+       LEFT JOIN departments ON departments.id = employees.department_id
        WHERE simulation_attempts.campaign_id = $1
        ORDER BY employees.full_name`,
       [req.params.id],

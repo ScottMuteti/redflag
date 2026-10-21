@@ -13,7 +13,7 @@ import {
   Square,
 } from 'lucide-react';
 import { getOrganizationAnalytics } from '../../api/analytics';
-import { createCampaign, launchCampaign, listCampaigns } from '../../api/campaigns';
+import { createCampaign, launchCampaign, listCampaigns, stopCampaign } from '../../api/campaigns';
 import {
   Button,
   Card,
@@ -121,6 +121,16 @@ function CampaignsPage() {
     }
   }
 
+  async function stop(row) {
+    try {
+      await stopCampaign(row.id);
+      toast.success(`“${row.name}” ${row.status === 'running' ? 'stopped' : 'unscheduled'}`);
+      reload();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Could not stop campaign');
+    }
+  }
+
   function exportSelected() {
     const picked = rows.filter((r) => selected.includes(r.id));
     downloadCsv('redflag-campaigns.csv', picked.length ? picked : rows, [
@@ -209,8 +219,16 @@ function CampaignsPage() {
             ...(['draft', 'scheduled'].includes(r.status)
               ? [{ label: 'Launch now', icon: Rocket, onClick: () => setToLaunch(r) }]
               : []),
-            // TODO: replace with API — there is no stop endpoint yet.
-            { label: 'Stop', icon: Square, disabled: true, hint: 'Soon', danger: true },
+            ...(['running', 'scheduled'].includes(r.status)
+              ? [
+                  {
+                    label: r.status === 'running' ? 'Stop' : 'Unschedule',
+                    icon: Square,
+                    onClick: () => stop(r),
+                    danger: true,
+                  },
+                ]
+              : []),
           ]}
         />
       ),

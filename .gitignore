@@ -47,3 +47,6 @@ Thumbs.db
 
 # Local Gophish install (not part of this monorepo)
 /gophish/
+
+# Local compose overrides
+docker-compose.override.yml

@@ -61,9 +61,18 @@ export function AuthProvider({ children }) {
     setUser(null);
   }, []);
 
+  // Merges profile edits into the stored user without a new login.
+  const updateUser = useCallback((changes) => {
+    setUser((prev) => {
+      const next = { ...prev, ...changes };
+      localStorage.setItem(USER_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
   const value = useMemo(
-    () => ({ user, login, registerOrganization, logout }),
-    [user, login, registerOrganization, logout],
+    () => ({ user, login, registerOrganization, logout, updateUser }),
+    [user, login, registerOrganization, logout, updateUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
