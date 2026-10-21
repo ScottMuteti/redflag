@@ -5,6 +5,7 @@ const rateLimit = require('express-rate-limit');
 const db = require('../../config/db');
 const env = require('../../config/env');
 const { authenticate, authorize } = require('../../middleware/auth');
+const { installStarterModules } = require('../training/training.routes');
 
 const router = express.Router();
 const SALT_ROUNDS = 10;
@@ -42,6 +43,10 @@ router.post('/register', async (req, res, next) => {
        RETURNING id, organization_id, full_name, email, role`,
       [organizationId, adminFullName, adminEmail, passwordHash],
     );
+
+    // Every org starts with training for each default lure, so a failed
+    // simulation always has a module to assign.
+    await installStarterModules(organizationId, client);
 
     await client.query('COMMIT');
 

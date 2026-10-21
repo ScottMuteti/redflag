@@ -32,5 +32,6 @@ module.exports = {
     username: process.env.AT_USERNAME || 'sandbox',
   },
   mlServiceUrl: process.env.ML_SERVICE_URL || 'http://localhost:8000',
+  mlTimeoutMs: Number(process.env.ML_TIMEOUT_MS) || 5000,
   publicBackendUrl: process.env.PUBLIC_BACKEND_URL || 'http://localhost:4000',
 };

@@ -24,7 +24,7 @@ describe('POST /api/auth/register', () => {
       .mockResolvedValueOnce({
         rows: [{ id: 5, organization_id: 1, full_name: 'Jane Admin', email: 'jane@acme.co.ke', role: 'admin' }],
       }) // insert admin_users
-      .mockResolvedValueOnce(undefined); // COMMIT
+      .mockResolvedValue({ rows: [] }); // starter modules + COMMIT
 
     const res = await request(app).post('/api/auth/register').send({
       organizationName: 'Acme Ltd',
@@ -37,6 +37,10 @@ describe('POST /api/auth/register', () => {
     expect(res.body.user.role).toBe('admin');
     const decoded = jwt.verify(res.body.token, process.env.JWT_SECRET);
     expect(decoded).toMatchObject({ sub: 5, role: 'admin', organizationId: 1 });
+    const moduleInserts = client.query.mock.calls.filter(([sql]) =>
+      sql.includes('INSERT INTO training_modules'),
+    );
+    expect(moduleInserts.length).toBeGreaterThan(0);
   });
 
   it('rejects a request missing required fields', async () => {

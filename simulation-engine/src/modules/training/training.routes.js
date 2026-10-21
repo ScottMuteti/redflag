@@ -25,18 +25,25 @@ const ASSIGNMENT_COLUMNS = `
 
 const json = (value) => (value === undefined || value === null ? null : JSON.stringify(value));
 
-// Auto-assigns training when an employee falls for a simulated attack.
-// Called from campaigns.routes.js's Gophish webhook and SMS tracking
-// handlers — not a route, exported alongside the router.
-async function maybeAssignTraining(organizationId, employeeId, category) {
+// Employees get questions and options only; the answer key stays on the server.
+const withoutAnswers = (quiz) =>
+  Array.isArray(quiz) ? quiz.map(({ correctIndex: _answer, ...question }) => question) : quiz;
+
+// Auto-assigns the module for the lure the employee fell for (template
+// category, e.g. 'mpesa'). Called from campaigns.routes.js event handling,
+// optionally inside its transaction via `client`.
+async function maybeAssignTraining(organizationId, employeeId, category, client = db) {
   if (!category) return;
-  const { rows: moduleRows } = await db.query(
+  const { rows: moduleRows } = await client.query(
     'SELECT id FROM training_modules WHERE organization_id = $1 AND category = $2 LIMIT 1',
     [organizationId, category],
   );
-  if (moduleRows.length === 0) return;
+  if (moduleRows.length === 0) {
+    console.warn(`No '${category}' training module in org ${organizationId}; nothing assigned`);
+    return;
+  }
 
-  await db.query(
+  await client.query(
     `INSERT INTO training_assignments (training_module_id, employee_id)
      VALUES ($1, $2)
      ON CONFLICT (training_module_id, employee_id) DO NOTHING`,
@@ -90,32 +97,30 @@ router.post('/modules', authorize('admin'), async (req, res, next) => {
   }
 });
 
-// Adds the built-in interactive modules the org doesn't have yet (matched by category).
+// Adds the built-in interactive modules the org doesn't have yet (matched by
+// category). Also run when an organisation registers.
+async function installStarterModules(organizationId, client = db) {
+  const { rows: existing } = await client.query(
+    'SELECT category FROM training_modules WHERE organization_id = $1',
+    [organizationId],
+  );
+  const have = new Set(existing.map((r) => r.category));
+  const toAdd = starterModules.filter((m) => !have.has(m.category));
+  for (const m of toAdd) {
+    await client.query(
+      `INSERT INTO training_modules
+         (organization_id, title, description, category, quiz, lessons, estimated_minutes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [organizationId, m.title, m.description, m.category, json(m.quiz), json(m.lessons), m.estimatedMinutes],
+    );
+  }
+  return toAdd.length;
+}
+
 router.post('/modules/starter', authorize('admin'), async (req, res, next) => {
   try {
-    const { rows: existing } = await db.query(
-      'SELECT category FROM training_modules WHERE organization_id = $1',
-      [req.user.organizationId],
-    );
-    const have = new Set(existing.map((r) => r.category));
-    const toAdd = starterModules.filter((m) => !have.has(m.category));
-    for (const m of toAdd) {
-      await db.query(
-        `INSERT INTO training_modules
-           (organization_id, title, description, category, quiz, lessons, estimated_minutes)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [
-          req.user.organizationId,
-          m.title,
-          m.description,
-          m.category,
-          json(m.quiz),
-          json(m.lessons),
-          m.estimatedMinutes,
-        ],
-      );
-    }
-    return res.status(201).json({ added: toAdd.length });
+    const added = await installStarterModules(req.user.organizationId);
+    return res.status(201).json({ added });
   } catch (err) {
     return next(err);
   }
@@ -178,7 +183,7 @@ router.get('/assignments', async (req, res, next) => {
          ORDER BY training_assignments.assigned_at DESC`,
         [req.user.sub],
       );
-      return res.json(rows);
+      return res.json(rows.map((row) => ({ ...row, quiz: withoutAnswers(row.quiz) })));
     }
 
     const { rows } = await db.query(
@@ -310,6 +315,8 @@ router.post('/assignments/:id/complete', async (req, res, next) => {
     const correct = review.filter((r) => r.correct).length;
     const score = quiz.length > 0 ? correct / quiz.length : 1;
     const passed = score >= PASS_THRESHOLD;
+    // Reveal correct answers only once passed, so a retake still tests knowledge.
+    if (!passed) review.forEach((r) => delete r.correctIndex);
 
     // Two separate query strings (not a CASE keyed off the same $1) — Postgres's
     // parameter type inference chokes on reusing $1 as both an assigned value
@@ -334,3 +341,4 @@ router.post('/assignments/:id/complete', async (req, res, next) => {
 
 module.exports = router;
 module.exports.maybeAssignTraining = maybeAssignTraining;
+module.exports.installStarterModules = installStarterModules;

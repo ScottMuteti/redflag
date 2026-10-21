@@ -6,6 +6,7 @@ const env = require('../../config/env');
 const gophishClient = require('../../integrations/gophish/gophishClient');
 const smsClient = require('../../integrations/africasTalking/smsClient');
 const { maybeAssignTraining } = require('../training/training.routes');
+const { rescoreAfterEvent } = require('../scoring/scoring.service');
 
 const router = express.Router();
 const requireAdmin = [authenticate, authorize('admin')];
@@ -14,7 +15,7 @@ const CAMPAIGN_COLUMNS = `
   id, name, type, template_key AS "templateKey", difficulty_level AS "difficultyLevel",
   status, gophish_campaign_id AS "gophishCampaignId", scheduled_at AS "scheduledAt",
   department_id AS "departmentId", launched_at AS "launchedAt", completed_at AS "completedAt",
-  created_at AS "createdAt"
+  authorised_at AS "authorisedAt", failure_reason AS "failureReason", created_at AS "createdAt"
 `;
 
 const TEMPLATE_COLUMNS = `
@@ -24,12 +25,20 @@ const TEMPLATE_COLUMNS = `
 
 const DIFFICULTIES = ['easy', 'medium', 'hard'];
 
+// Gophish event -> attempt timestamp. The event's `details` (which can hold
+// whatever was typed into the landing page) is deliberately never read or stored.
 const EVENT_COLUMN = {
   'Email Sent': 'sent_at',
   'Email Opened': 'opened_at',
   'Clicked Link': 'clicked_at',
   'Submitted Data': 'submitted_credentials_at',
+  'Email Reported': 'reported_at',
 };
+const FAILURE_COLUMNS = ['clicked_at', 'submitted_credentials_at'];
+const RESCORE_COLUMNS = [...FAILURE_COLUMNS, 'reported_at'];
+const LAUNCHABLE = ['draft', 'scheduled', 'failed'];
+const AUTH_REQUIRED_MESSAGE =
+  'Confirm that every recipient is an enrolled employee you are authorised to test (acknowledgeAuthorisation: true)';
 
 async function getTargetEmployees(organizationId, departmentId) {
   const params = [organizationId];
@@ -58,6 +67,44 @@ async function getCampaignOrgAndCategory(campaignId) {
     [campaignId],
   );
   return rows[0];
+}
+
+// Writes one tracked event. Each timestamp is set once, the first time it's
+// seen, so replayed or out-of-order deliveries change nothing. A first click or
+// submission assigns training in the same transaction; rescoring runs after
+// commit so a down scoring service can't lose the event.
+async function recordEvent({ campaignId, employeeId, column, at }) {
+  const campaignInfo = await getCampaignOrgAndCategory(campaignId);
+  const client = await db.getClient();
+  let firstTime;
+  try {
+    await client.query('BEGIN');
+    const { rowCount } = await client.query(
+      `UPDATE simulation_attempts SET ${column} = $3
+       WHERE campaign_id = $1 AND employee_id = $2 AND ${column} IS NULL`,
+      [campaignId, employeeId, at],
+    );
+    firstTime = rowCount === 1;
+    if (firstTime && FAILURE_COLUMNS.includes(column) && campaignInfo) {
+      await maybeAssignTraining(
+        campaignInfo.organizationId,
+        employeeId,
+        campaignInfo.category,
+        client,
+      );
+    }
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+
+  if (firstTime && RESCORE_COLUMNS.includes(column) && campaignInfo) {
+    await rescoreAfterEvent(employeeId, campaignInfo.organizationId, campaignId);
+  }
+  return firstTime;
 }
 
 function verifyGophishSignature(req) {
@@ -187,21 +234,13 @@ router.delete('/templates/:key', ...requireAdmin, async (req, res, next) => {
 router.get('/track/:token', async (req, res, next) => {
   try {
     const { rows } = await db.query(
-      `UPDATE simulation_attempts SET clicked_at = COALESCE(clicked_at, now())
-       WHERE tracking_token = $1
-       RETURNING campaign_id AS "campaignId", employee_id AS "employeeId"`,
+      `SELECT campaign_id AS "campaignId", employee_id AS "employeeId"
+       FROM simulation_attempts WHERE tracking_token::text = $1`,
       [req.params.token],
     );
     if (rows.length === 0) return res.status(404).send('Not found');
 
-    const campaignInfo = await getCampaignOrgAndCategory(rows[0].campaignId);
-    if (campaignInfo) {
-      await maybeAssignTraining(
-        campaignInfo.organizationId,
-        rows[0].employeeId,
-        campaignInfo.category,
-      );
-    }
+    await recordEvent({ ...rows[0], column: 'clicked_at', at: new Date() });
 
     return res.send(`<!doctype html>
 <html>
@@ -224,39 +263,37 @@ router.post('/webhook/gophish', async (req, res, next) => {
     return res.status(401).json({ message: 'Invalid signature' });
   }
 
-  try {
-    const { campaign_id: gophishCampaignId, email, message } = req.body;
-    const column = EVENT_COLUMN[message];
-    if (!column) return res.status(200).json({ message: 'Ignored event' });
+  const { campaign_id: gophishCampaignId, email, message, time } = req.body || {};
+  const column = EVENT_COLUMN[message];
+  if (!column) return res.status(200).json({ message: 'Ignored event' });
+  if (!Number.isInteger(gophishCampaignId) || typeof email !== 'string') {
+    return res.status(400).json({ message: 'campaign_id and email are required' });
+  }
+  const at = time && !Number.isNaN(Date.parse(time)) ? new Date(time) : new Date();
 
+  try {
     const { rows: campaignRows } = await db.query(
-      'SELECT id FROM simulation_campaigns WHERE gophish_campaign_id = $1',
+      `SELECT id, organization_id AS "organizationId"
+       FROM simulation_campaigns WHERE gophish_campaign_id = $1`,
       [gophishCampaignId],
     );
     if (campaignRows.length === 0) return res.status(200).json({ message: 'Unknown campaign' });
+    const campaign = campaignRows[0];
 
-    const { rows: employeeRows } = await db.query('SELECT id FROM employees WHERE email = $1', [
-      email,
-    ]);
+    // Only employees of the campaign's own organisation can be matched.
+    const { rows: employeeRows } = await db.query(
+      'SELECT id FROM employees WHERE lower(email) = lower($1) AND organization_id = $2',
+      [email, campaign.organizationId],
+    );
     if (employeeRows.length === 0) return res.status(200).json({ message: 'Unknown employee' });
 
-    await db.query(
-      `UPDATE simulation_attempts SET ${column} = now() WHERE campaign_id = $1 AND employee_id = $2`,
-      [campaignRows[0].id, employeeRows[0].id],
-    );
-
-    if (column === 'clicked_at' || column === 'submitted_credentials_at') {
-      const campaignInfo = await getCampaignOrgAndCategory(campaignRows[0].id);
-      if (campaignInfo) {
-        await maybeAssignTraining(
-          campaignInfo.organizationId,
-          employeeRows[0].id,
-          campaignInfo.category,
-        );
-      }
-    }
-
-    return res.status(200).json({ message: 'ok' });
+    const firstTime = await recordEvent({
+      campaignId: campaign.id,
+      employeeId: employeeRows[0].id,
+      column,
+      at,
+    });
+    return res.status(200).json({ message: firstTime ? 'ok' : 'Duplicate event ignored' });
   } catch (err) {
     return next(err);
   }
@@ -276,6 +313,7 @@ router.get('/', ...requireAdmin, async (req, res, next) => {
 
 router.post('/', ...requireAdmin, async (req, res, next) => {
   const { name, type, templateKey, difficultyLevel, scheduledAt, departmentId } = req.body;
+  const acknowledged = req.body.acknowledgeAuthorisation === true;
   if (!name || !type || !templateKey) {
     return res.status(400).json({ message: 'name, type and templateKey are required' });
   }
@@ -287,6 +325,10 @@ router.post('/', ...requireAdmin, async (req, res, next) => {
   }
   if (difficultyLevel && !DIFFICULTIES.includes(difficultyLevel)) {
     return res.status(400).json({ message: 'difficultyLevel must be easy, medium or hard' });
+  }
+  // Scheduling is a deferred launch, so it needs the same authorisation.
+  if (scheduledAt && !acknowledged) {
+    return res.status(422).json({ message: AUTH_REQUIRED_MESSAGE });
   }
 
   try {
@@ -301,8 +343,8 @@ router.post('/', ...requireAdmin, async (req, res, next) => {
     const { rows } = await db.query(
       `INSERT INTO simulation_campaigns
          (organization_id, created_by, name, type, template_key, difficulty_level, status,
-          scheduled_at, department_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          scheduled_at, department_id, authorised_by, authorised_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING ${CAMPAIGN_COLUMNS}`,
       [
         req.user.organizationId,
@@ -314,6 +356,8 @@ router.post('/', ...requireAdmin, async (req, res, next) => {
         scheduledAt ? 'scheduled' : 'draft',
         scheduledAt || null,
         departmentId || null,
+        acknowledged && scheduledAt ? req.user.sub : null,
+        acknowledged && scheduledAt ? new Date() : null,
       ],
     );
     return res.status(201).json(rows[0]);
@@ -362,15 +406,17 @@ async function launchCampaign(campaign, organizationId, departmentId) {
 
   if (campaign.type === 'email') {
     let gophishCampaign;
+    // Suffix keeps names unique if a failed launch left objects behind in Gophish.
+    const ref = `redflag-${campaign.id}-${Date.now()}`;
     try {
-      const group = await gophishClient.createGroup(`redflag-${campaign.id}`, employees);
+      const group = await gophishClient.createGroup(ref, employees);
       const gophishTemplate = await gophishClient.createTemplate(
-        `redflag-${campaign.id}`,
+        ref,
         template.subject,
         template.body,
       );
       gophishCampaign = await gophishClient.createCampaign({
-        name: `redflag-${campaign.id}-${campaign.name}`,
+        name: `${ref}-${campaign.name}`,
         groupName: group.name,
         templateName: gophishTemplate.name,
         pageName: env.gophish.landingPage,
@@ -385,7 +431,8 @@ async function launchCampaign(campaign, organizationId, departmentId) {
     }
 
     await db.query(
-      `UPDATE simulation_campaigns SET status = $1, gophish_campaign_id = $2, launched_at = now()
+      `UPDATE simulation_campaigns SET status = $1, gophish_campaign_id = $2, launched_at = now(),
+         failure_reason = NULL
        WHERE id = $3`,
       ['running', gophishCampaign.id, campaign.id],
     );
@@ -441,7 +488,7 @@ async function launchCampaign(campaign, organizationId, departmentId) {
     }
 
     await db.query(
-      'UPDATE simulation_campaigns SET status = $1, launched_at = now() WHERE id = $2',
+      'UPDATE simulation_campaigns SET status = $1, launched_at = now(), failure_reason = NULL WHERE id = $2',
       ['running', campaign.id],
     );
     return `Campaign launched (${sentCount}/${targeted.length} messages sent)`;
@@ -450,37 +497,65 @@ async function launchCampaign(campaign, organizationId, departmentId) {
   return 'Campaign launched';
 }
 
+// Moves a campaign into 'launching' in one statement, so a double-click or a
+// scheduler tick racing a manual launch can only start it once.
+async function claimForLaunch(campaignId, organizationId, statuses = LAUNCHABLE) {
+  const { rows } = await db.query(
+    `UPDATE simulation_campaigns SET status = 'launching'
+     WHERE id = $1 AND organization_id = $2 AND status = ANY($3::text[])
+     RETURNING ${CAMPAIGN_COLUMNS}`,
+    [campaignId, organizationId, statuses],
+  );
+  return rows[0];
+}
+
+async function markFailed(campaignId, reason) {
+  await db.query(
+    "UPDATE simulation_campaigns SET status = 'failed', failure_reason = $2 WHERE id = $1",
+    [campaignId, reason],
+  );
+}
+
 // Launches scheduled campaigns whose time has come. Run on an interval from index.js.
 async function launchDueCampaigns() {
   const { rows } = await db.query(
-    `SELECT ${CAMPAIGN_COLUMNS}, organization_id AS "organizationId"
-     FROM simulation_campaigns WHERE status = 'scheduled' AND scheduled_at <= now()`,
+    `SELECT id, organization_id AS "organizationId" FROM simulation_campaigns
+     WHERE status = 'scheduled' AND scheduled_at <= now() AND authorised_at IS NOT NULL`,
   );
-  for (const campaign of rows) {
+  for (const due of rows) {
+    const campaign = await claimForLaunch(due.id, due.organizationId, ['scheduled']);
+    if (!campaign) continue;
     try {
-      await launchCampaign(campaign, campaign.organizationId, campaign.departmentId);
+      await launchCampaign(campaign, due.organizationId, campaign.departmentId);
     } catch (err) {
-      // Back to draft so a failing launch isn't retried every tick; admin can relaunch manually.
-      await db.query("UPDATE simulation_campaigns SET status = 'draft' WHERE id = $1", [
-        campaign.id,
-      ]);
+      // Marked failed (not retried every tick); the admin can relaunch manually.
+      await markFailed(campaign.id, err.detail ? `${err.message}: ${err.detail}` : err.message);
       console.error(`Scheduled launch of campaign ${campaign.id} failed: ${err.message}`);
     }
   }
 }
 
 router.post('/:id/launch', ...requireAdmin, async (req, res, next) => {
+  if (req.body.acknowledgeAuthorisation !== true) {
+    return res.status(422).json({ message: AUTH_REQUIRED_MESSAGE });
+  }
+
+  let campaign;
   try {
-    const { rows: campaignRows } = await db.query(
-      `SELECT ${CAMPAIGN_COLUMNS} FROM simulation_campaigns WHERE id = $1 AND organization_id = $2`,
-      [req.params.id, req.user.organizationId],
-    );
-    if (campaignRows.length === 0) return res.status(404).json({ message: 'Campaign not found' });
-    const campaign = campaignRows[0];
-    if (!['draft', 'scheduled'].includes(campaign.status)) {
-      return res.status(409).json({ message: `Campaign is already ${campaign.status}` });
+    campaign = await claimForLaunch(req.params.id, req.user.organizationId);
+    if (!campaign) {
+      const { rows } = await db.query(
+        'SELECT status FROM simulation_campaigns WHERE id = $1 AND organization_id = $2',
+        [req.params.id, req.user.organizationId],
+      );
+      if (rows.length === 0) return res.status(404).json({ message: 'Campaign not found' });
+      return res.status(409).json({ message: `Campaign is already ${rows[0].status}` });
     }
 
+    await db.query(
+      'UPDATE simulation_campaigns SET authorised_by = $1, authorised_at = now() WHERE id = $2',
+      [req.user.sub, campaign.id],
+    );
     const message = await launchCampaign(
       campaign,
       req.user.organizationId,
@@ -488,6 +563,9 @@ router.post('/:id/launch', ...requireAdmin, async (req, res, next) => {
     );
     return res.json({ message });
   } catch (err) {
+    if (campaign) {
+      await markFailed(campaign.id, err.detail ? `${err.message}: ${err.detail}` : err.message);
+    }
     if (err instanceof LaunchError) {
       return res.status(err.status).json({ message: err.message, detail: err.detail });
     }
@@ -529,7 +607,7 @@ router.post('/:id/stop', ...requireAdmin, async (req, res, next) => {
   }
 });
 
-// Only drafts can be deleted; launched campaigns keep their history.
+// Only drafts and failed launches can be deleted; launched campaigns keep their history.
 router.delete('/:id', ...requireAdmin, async (req, res, next) => {
   try {
     const { rows } = await db.query(
@@ -537,8 +615,8 @@ router.delete('/:id', ...requireAdmin, async (req, res, next) => {
       [req.params.id, req.user.organizationId],
     );
     if (rows.length === 0) return res.status(404).json({ message: 'Campaign not found' });
-    if (rows[0].status !== 'draft') {
-      return res.status(409).json({ message: 'Only draft campaigns can be deleted' });
+    if (!['draft', 'failed'].includes(rows[0].status)) {
+      return res.status(409).json({ message: 'Only draft or failed campaigns can be deleted' });
     }
     await db.query('DELETE FROM simulation_campaigns WHERE id = $1', [req.params.id]);
     return res.status(204).send();

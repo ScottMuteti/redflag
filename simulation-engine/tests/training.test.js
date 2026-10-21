@@ -41,6 +41,19 @@ describe('GET /api/training/assignments', () => {
     expect(res.statusCode).toBe(200);
     expect(db.query).toHaveBeenCalledWith(expect.stringContaining('training_assignments.employee_id = $1'), [10]);
   });
+
+  it('never sends the quiz answer key to an employee', async () => {
+    db.query.mockResolvedValueOnce({
+      rows: [{ id: 1, quiz: [{ question: 'Q1', options: ['a', 'b'], correctIndex: 1 }] }],
+    });
+
+    const res = await request(app)
+      .get('/api/training/assignments')
+      .set('Authorization', `Bearer ${token({ sub: 10, role: 'employee' })}`);
+
+    expect(res.body[0].quiz[0]).toEqual({ question: 'Q1', options: ['a', 'b'] });
+    expect(JSON.stringify(res.body)).not.toContain('correctIndex');
+  });
 });
 
 describe('POST /api/training/assignments/:id/complete', () => {
@@ -79,6 +92,9 @@ describe('POST /api/training/assignments/:id/complete', () => {
     expect(res.statusCode).toBe(200);
     expect(res.body.passed).toBe(false);
     expect(res.body.score).toBe(0.5);
+    // Which answers were wrong is shown, but not what the right ones are.
+    expect(res.body.review.map((r) => r.correct)).toEqual([false, true]);
+    expect(JSON.stringify(res.body)).not.toContain('correctIndex');
   });
 
   it('forbids completing someone else\'s assignment', async () => {

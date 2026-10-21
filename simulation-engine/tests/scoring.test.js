@@ -32,7 +32,33 @@ describe('POST /api/scoring/compute', () => {
     expect(axios.post).toHaveBeenCalledWith(
       expect.stringContaining('/predict'),
       expect.objectContaining({ department: 'Finance', campaigns_sent: 10, clicked: 5 }),
+      expect.objectContaining({ timeout: expect.any(Number) }),
     );
+  });
+
+  const featureRow = {
+    rows: [{ hireDate: null, department: null, campaignsSent: 0, opened: 0, clicked: 0, submitted: 0, reported: 0 }],
+  };
+
+  it('returns 503 and stores nothing when the scoring service times out', async () => {
+    db.query.mockResolvedValueOnce(featureRow);
+    axios.post.mockRejectedValue(Object.assign(new Error('timeout'), { code: 'ECONNABORTED' }));
+
+    const res = await request(app).post('/api/scoring/compute').set('Authorization', `Bearer ${token()}`).send({ employeeId: 10 });
+
+    expect(res.statusCode).toBe(503);
+    expect(res.body.message).toMatch(/Score unavailable/);
+    expect(db.query).toHaveBeenCalledTimes(1); // features only, no INSERT
+  });
+
+  it('rejects a scoring reply without a model version', async () => {
+    db.query.mockResolvedValueOnce(featureRow);
+    axios.post.mockResolvedValue({ data: { score: 0.5, risk_level: 'medium' } });
+
+    const res = await request(app).post('/api/scoring/compute').set('Authorization', `Bearer ${token()}`).send({ employeeId: 10 });
+
+    expect(res.statusCode).toBe(503);
+    expect(db.query).toHaveBeenCalledTimes(1);
   });
 
   it('returns 404 when the employee does not exist in this org', async () => {
