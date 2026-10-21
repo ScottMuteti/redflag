@@ -6,7 +6,8 @@ Not deployed yet. This captures what each component needs so Sprint III can exec
 
 | Component | Runtime | Port | Health | External deps |
 |-----------|---------|------|--------|---------------|
-| simulation-engine | Node 20 / Express | 4000 | `GET /health` | Postgres, risk-model, Gophish, Africa's Talking |
+| simulation-engine (admin API) | Node 20 / Express | 4000 | `GET /health` | Postgres, risk-model, Gophish, Africa's Talking |
+| simulation-engine (public surface) | Node 20 / Express | 4001 | `GET /health` | same process; click-tracking endpoint only |
 | risk-model | Python 3.11 / FastAPI | 8000 | `GET /health` | pinned model artifact at startup |
 | portal | React build (static) | 80 | — | simulation-engine API |
 | postgres | PostgreSQL 16 | 5432 | — | persistent volume |
@@ -17,6 +18,19 @@ Not deployed yet. This captures what each component needs so Sprint III can exec
 `GOPHISH_API_KEY`, `GOPHISH_WEBHOOK_SECRET`, `GMAIL_USER`/`GMAIL_APP_PASSWORD`
 (or another SMTP relay), `AT_API_KEY`, DB credentials. All documented in
 `.env.example`.
+
+## Public vs private surface (Table 5.5)
+The engine binds two ports in one process. Only the public one is internet-facing.
+
+| Surface | Port | Routes | Exposure |
+|---------|------|--------|----------|
+| Admin API | 4000 | auth, employees, campaigns, scoring, analytics, reports, Gophish webhook | Private: internal network / gateway + IP allowlist. Never tunnelled. |
+| Public | 4001 | `GET /api/campaigns/track/:token`, `/health` | Internet-facing (tunnel locally; public HTTPS + domain in prod). |
+
+An admin path on the public surface returns 404 — it is not mounted in that
+listener (`src/publicApp.js`), asserted by `tests/public-app.test.js`. The
+Gophish webhook stays on the admin port because Gophish reaches the engine over
+the internal network, not the public URL. Rationale: `docs/decisions/003`.
 
 ## Hard realities
 - **Gophish needs a public, reachable listener** for tracking pixels, click

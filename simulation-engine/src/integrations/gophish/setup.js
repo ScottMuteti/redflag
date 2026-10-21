@@ -67,7 +67,7 @@ async function main() {
     host: 'smtp.gmail.com:587',
     username: env.gmail.user,
     password: env.gmail.appPassword,
-    from_address: `RedFlag Awareness <${env.gmail.user}>`,
+    from_address: env.gmail.user,
     ignore_cert_errors: true,
   });
   console.log(`✓ SMTP profile "${SMTP_NAME}" (via ${env.gmail.user})`);

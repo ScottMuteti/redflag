@@ -36,13 +36,18 @@ Automated totals on 2026-10-21: engine **59 passed**, risk-model **9 passed**.
 | T-26 | Reproducible dataset (O3) | generate twice, same seed | identical frames | equal | ✅ | `test_ml_pipeline.py` |
 | T-27 | Predict without model | no joblib | 503 | as expected | ✅ | `test_predict.py` |
 | T-28 | Cold start flagged | prior_sent=0 | low_data true | as expected | ✅ | `test_predict.py` |
+| T-31 | Public surface isolation | admin paths on public app (4001) | 404 (route not mounted); track served | `/api/employees`→404 on 4001 vs 401 on 4000; 3 asserts | ✅ | `public-app.test.js`; live curl |
+| T-32 | Full loop via public port | SMS click on the tunnelled public URL (:4001) | click recorded, training assigned, score rescored | emp 34: clicked=t 14:49:58, training 1→2, score 5→6; emp 30 score 0.5942→0.6151 model `20261021074019` | ✅ | live run 2026-10-21; DB query |
+
+| T-29 | Gophish email live (O4) | launch email campaign, click link in Gmail via public tunnel | webhook fires, attempt+score rows | external click → webhook → clicked=t, training assigned, score 0.45 recomputed; untargeted employee untouched | ✅ | live run 2026-10-21; DB query |
+| T-30 | Injection in template fields | `<script>…'; DROP TABLE employees;--` in body | stored as text; bound parameter, not inline SQL | param contains the string verbatim; SQL has no `DROP TABLE` | ✅ | `campaigns.test.js` |
 
 ## Pending (before/at review)
-- **T-29 Gophish email live** — register SMTP via `npm run gophish:setup`, launch to Gmail plus-aliases, click, confirm attempt+score rows. ⛔ blocked on API key + App Password.
-- **T-30 XSS/SQLi in template fields** — submit `<script>` and `' OR 1=1` in template body/subject; expect stored-as-text, parameterised queries (no injection). Queries are already parameterised (`pg` placeholders); formal test pending.
+- **Integration tests against a real Postgres in CI** — unit tests currently mock the DB; wiring a Postgres service container into CI is cut to Sprint III (documented on the board).
 - **T-31 Oversize payload** — POST >1 MB CSV; expect 413. Limit set in `app.js`; formal test pending.
 
 ## Corrective actions taken this sprint
 - **Leaky ML label** (circular `susceptible = click_prob > 0.5`) → relabeled as failure on the *next* simulation; AUC fell from 0.96 to 0.71 (honest). See AI_ASSISTANCE_LOG entry 1.
 - **Landing page captured passwords** → `capture_credentials/passwords=false`; T-07 added.
 - **Webhook overwrote timestamps on replay** → first-seen `COALESCE`/`IS NULL` guard; T-08 added.
+| T-33 | Mixed-batch variant spread | launch pooled SMS campaign (3 variants) to 10 | each recipient gets one variant, evenly | 10/10 sent, spread 4/3/3; click via public tunnel recorded variant `mpesa-sms-easy` | ✅ | `campaigns.test.js` + live run 2026-10-21 |

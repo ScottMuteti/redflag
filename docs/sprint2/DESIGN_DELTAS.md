@@ -21,3 +21,38 @@ The developer should reconcile each: update the code or update the diagram.
 Export the class, ERD, sequence and activity diagrams into `docs/chapter4/`,
 walk this table against them, and either amend the diagram or raise a code
 change. The report, code, UI and diagrams must describe one system.
+
+## Template & training library expansion (2026-10-21)
+The default library grew from 4 to **21 global templates** across **10 Kenyan
+lure categories** (mpesa, bank, safaricom, kra, invoice, it-support, hr-payroll,
+delivery, ceo-fraud, sacco) and all three difficulty levels (easy/medium/hard),
+on both channels. Email templates for medium/hard use Gophish merge tags
+(`{{.FirstName}}`, `{{.Position}}`) for realism; SMS uses `{{link}}`. Added as
+idempotent seed rows in `migrations/004_template_library.sql`.
+Training modules grew from 4 to **10** — one interactive module (read /
+spot-the-flag / choice + quiz) per category, so every template category has a
+matching remedial module (`training.starter.js`). New orgs get all 10 at
+registration; existing orgs pick up new categories via `installStarterModules`.
+
+## Internal sample generator (2026-10-21)
+Added a client-side (in-browser) generator that produces editable example lure
+drafts on demand — no external AI, no network, no API key. `portal/src/content/
+banks.js` holds human-written phrase banks per category/channel/difficulty;
+`generator.js` is a pure, seeded function that recombines them into a renewable
+pool of drafts. In the New Campaign wizard, "Generate example messages" yields 5
+editable options (category + level, or "any" for a mixed batch); saving a draft
+persists it as a reusable org template via the existing `POST /templates` and
+selects it. Pure logic is unit-tested (`generator.test.mjs`, 7 tests, run with
+`node`). The same pure module can later be imported server-side to pick a
+different variant per recipient for mixed-batch sending.
+
+## Mixed-batch sending (2026-10-21)
+A campaign can carry a `template_pool`; at launch each recipient is assigned one
+variant via seeded round-robin (`migrations/005_mixed_batch.sql`,
+`simulation_attempts.template_key` records which). SMS sends per-recipient
+directly; email becomes one Gophish sub-campaign per variant
+(`campaign_gophish_sends`), and the webhook resolves a campaign from either its
+own Gophish id or any sub-send id. Portal: a "Mixed batch" toggle in the
+campaign wizard turns the template list into a multi-select pool. Defeats the
+"identical message to everyone at once" tell. Send-time jitter is the remaining
+piece (deferred).

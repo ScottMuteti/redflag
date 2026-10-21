@@ -71,3 +71,18 @@ calibrated probability; the UI labels it "risk score", never "confidence".
 Synthetic data; SMS sandbox only; email live-run pending the Gophish key at time
 of writing; single-organisation pilot to come. See the known-issues section of
 SPRINT2_BOARD.md.
+
+## 5.8 Security by design
+- **Least public surface.** The engine runs two listeners: the full admin API
+  (port 4000, private) and a separate internet-facing app (port 4001) that
+  mounts *only* the click-tracking endpoint. Only the public port is exposed
+  (a Cloudflare quick tunnel locally; a gateway in production). Reaching an
+  admin path on the public URL is a 404 — the route is not in that process —
+  so containment holds by architecture, not by remembering to close a tunnel.
+  Guaranteed by `tests/public-app.test.js`. Decision: `docs/decisions/003`.
+- Tracking tokens are opaque random values (no tenant data on the public path);
+  the Gophish webhook is HMAC-signed and stays on the private network.
+- Tenant identity always from the JWT; credentials never captured by the
+  landing pages (`capture_credentials:false`); quiz answer keys stripped from
+  employee payloads.
+- *Table 5.5*: public vs private surface → DEPLOYMENT_REQUIREMENTS.md.

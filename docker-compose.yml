@@ -18,7 +18,8 @@ services:
     restart: unless-stopped
     env_file: .env
     ports:
-      - "4000:4000"
+      - "4000:4000" # admin API — keep private; do NOT tunnel this
+      - "4001:4001" # public surface (click tracking only) — the tunnel targets this
     depends_on:
       - postgres
     volumes:

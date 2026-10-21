@@ -15,7 +15,8 @@ const CAMPAIGN_COLUMNS = `
   id, name, type, template_key AS "templateKey", difficulty_level AS "difficultyLevel",
   status, gophish_campaign_id AS "gophishCampaignId", scheduled_at AS "scheduledAt",
   department_id AS "departmentId", launched_at AS "launchedAt", completed_at AS "completedAt",
-  authorised_at AS "authorisedAt", failure_reason AS "failureReason", created_at AS "createdAt"
+  authorised_at AS "authorisedAt", failure_reason AS "failureReason",
+  template_pool AS "templatePool", created_at AS "createdAt"
 `;
 
 const TEMPLATE_COLUMNS = `
@@ -231,7 +232,9 @@ router.delete('/templates/:key', ...requireAdmin, async (req, res, next) => {
 });
 
 // Public: SMS click-tracking link embedded in smishing messages.
-router.get('/track/:token', async (req, res, next) => {
+// Exported so the internet-facing publicApp can mount it in isolation, without
+// pulling in any admin route (see src/publicApp.js).
+async function trackClick(req, res, next) {
   try {
     const { rows } = await db.query(
       `SELECT campaign_id AS "campaignId", employee_id AS "employeeId"
@@ -255,7 +258,8 @@ router.get('/track/:token', async (req, res, next) => {
   } catch (err) {
     return next(err);
   }
-});
+}
+router.get('/track/:token', trackClick);
 
 // Public: Gophish webhook, HMAC-verified via GOPHISH_WEBHOOK_SECRET.
 router.post('/webhook/gophish', async (req, res, next) => {
@@ -272,9 +276,17 @@ router.post('/webhook/gophish', async (req, res, next) => {
   const at = time && !Number.isNaN(Date.parse(time)) ? new Date(time) : new Date();
 
   try {
+    // Resolve the RedFlag campaign from the Gophish id — either the campaign's
+    // own id or any of its mixed-batch sub-send ids.
     const { rows: campaignRows } = await db.query(
       `SELECT id, organization_id AS "organizationId"
-       FROM simulation_campaigns WHERE gophish_campaign_id = $1`,
+         FROM simulation_campaigns WHERE gophish_campaign_id = $1
+       UNION
+       SELECT sc.id, sc.organization_id
+         FROM simulation_campaigns sc
+         JOIN campaign_gophish_sends cgs ON cgs.campaign_id = sc.id
+         WHERE cgs.gophish_campaign_id = $1
+       LIMIT 1`,
       [gophishCampaignId],
     );
     if (campaignRows.length === 0) return res.status(200).json({ message: 'Unknown campaign' });
@@ -314,11 +326,17 @@ router.get('/', ...requireAdmin, async (req, res, next) => {
 router.post('/', ...requireAdmin, async (req, res, next) => {
   const { name, type, templateKey, difficultyLevel, scheduledAt, departmentId } = req.body;
   const acknowledged = req.body.acknowledgeAuthorisation === true;
+  // Optional mixed-batch pool: extra template keys; each recipient gets one of
+  // the pool (primary templateKey included), so the send is not identical.
+  const rawPool = Array.isArray(req.body.templatePool) ? req.body.templatePool : [];
   if (!name || !type || !templateKey) {
     return res.status(400).json({ message: 'name, type and templateKey are required' });
   }
   if (!['email', 'sms'].includes(type)) {
     return res.status(400).json({ message: 'type must be email or sms' });
+  }
+  if (rawPool.some((k) => typeof k !== 'string')) {
+    return res.status(400).json({ message: 'templatePool must be an array of template keys' });
   }
   if (scheduledAt && Number.isNaN(Date.parse(scheduledAt))) {
     return res.status(400).json({ message: 'scheduledAt must be a valid date' });
@@ -340,11 +358,32 @@ router.post('/', ...requireAdmin, async (req, res, next) => {
       if (deptRows.length === 0) return res.status(400).json({ message: 'Unknown departmentId' });
     }
 
+    // The full pool is the primary template plus any extra keys, de-duplicated.
+    // Every key must exist and match the campaign channel. A pool of one is just
+    // a normal single-template campaign, so we store NULL in that case.
+    const poolKeys = [...new Set([templateKey, ...rawPool])];
+    if (poolKeys.length > 1) {
+      const { rows: poolRows } = await db.query(
+        `SELECT key FROM campaign_templates
+         WHERE key = ANY($1::text[]) AND type = $2
+           AND (organization_id = $3 OR organization_id IS NULL)`,
+        [poolKeys, type, req.user.organizationId],
+      );
+      const found = new Set(poolRows.map((r) => r.key));
+      const missing = poolKeys.filter((k) => !found.has(k));
+      if (missing.length > 0) {
+        return res
+          .status(400)
+          .json({ message: `Unknown or wrong-channel template(s): ${missing.join(', ')}` });
+      }
+    }
+    const templatePool = poolKeys.length > 1 ? poolKeys : null;
+
     const { rows } = await db.query(
       `INSERT INTO simulation_campaigns
          (organization_id, created_by, name, type, template_key, difficulty_level, status,
-          scheduled_at, department_id, authorised_by, authorised_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          scheduled_at, department_id, authorised_by, authorised_at, template_pool)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        RETURNING ${CAMPAIGN_COLUMNS}`,
       [
         req.user.organizationId,
@@ -358,6 +397,7 @@ router.post('/', ...requireAdmin, async (req, res, next) => {
         departmentId || null,
         acknowledged && scheduledAt ? req.user.sub : null,
         acknowledged && scheduledAt ? new Date() : null,
+        templatePool,
       ],
     );
     return res.status(201).json(rows[0]);
@@ -390,38 +430,88 @@ class LaunchError extends Error {
   }
 }
 
+// The pool of template keys for a campaign: its explicit mixed-batch pool, or
+// just its single template. A pool of >1 means each recipient gets one of them.
+function campaignPool(campaign) {
+  return campaign.templatePool && campaign.templatePool.length > 0
+    ? campaign.templatePool
+    : [campaign.templateKey];
+}
+
+async function loadTemplates(keys, organizationId) {
+  const { rows } = await db.query(
+    `SELECT DISTINCT ON (key) key, type, subject, body FROM campaign_templates
+     WHERE key = ANY($1::text[]) AND (organization_id = $2 OR organization_id IS NULL)
+     ORDER BY key, organization_id NULLS LAST`,
+    [keys, organizationId],
+  );
+  return new Map(rows.map((t) => [t.key, t]));
+}
+
+// Deterministic per-recipient variant assignment: round-robin over the pool in a
+// seed-shuffled order, so the spread is even and the same campaign is repeatable.
+function assignVariants(employeeIds, poolKeys, seed) {
+  const order = [...poolKeys];
+  let a = (seed >>> 0) || 1;
+  const rand = () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  for (let i = order.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(rand() * (i + 1));
+    [order[i], order[j]] = [order[j], order[i]];
+  }
+  const map = new Map();
+  employeeIds.forEach((id, i) => map.set(id, order[i % order.length]));
+  return map;
+}
+
 // Shared by the launch route and the scheduler.
 async function launchCampaign(campaign, organizationId, departmentId) {
-  const { rows: templateRows } = await db.query(
-    `SELECT type, subject, body FROM campaign_templates
-     WHERE key = $1 AND (organization_id = $2 OR organization_id IS NULL)
-     ORDER BY organization_id NULLS LAST LIMIT 1`,
-    [campaign.templateKey, organizationId],
-  );
-  if (templateRows.length === 0) throw new LaunchError(400, 'Unknown templateKey');
-  const template = templateRows[0];
+  const poolKeys = campaignPool(campaign);
+  const byKey = await loadTemplates(poolKeys, organizationId);
+  const missing = poolKeys.filter((k) => !byKey.has(k));
+  if (missing.length > 0) throw new LaunchError(400, `Unknown templateKey(s): ${missing.join(', ')}`);
+  if ([...byKey.values()].some((t) => t.type !== campaign.type)) {
+    throw new LaunchError(400, 'A pooled template does not match the campaign channel');
+  }
 
   const employees = await getTargetEmployees(organizationId, departmentId);
   if (employees.length === 0) throw new LaunchError(400, 'No employees to target');
 
   if (campaign.type === 'email') {
-    let gophishCampaign;
-    // Suffix keeps names unique if a failed launch left objects behind in Gophish.
-    const ref = `redflag-${campaign.id}-${Date.now()}`;
+    const assignment = assignVariants(
+      employees.map((e) => e.id),
+      poolKeys,
+      campaign.id,
+    );
+    // Gophish sends one template per campaign, so a mixed email batch becomes one
+    // Gophish sub-campaign per template, each with the recipients assigned to it.
+    const groups = new Map();
+    for (const emp of employees) {
+      const key = assignment.get(emp.id);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(emp);
+    }
+
+    const sends = [];
     try {
-      const group = await gophishClient.createGroup(ref, employees);
-      const gophishTemplate = await gophishClient.createTemplate(
-        ref,
-        template.subject,
-        template.body,
-      );
-      gophishCampaign = await gophishClient.createCampaign({
-        name: `${ref}-${campaign.name}`,
-        groupName: group.name,
-        templateName: gophishTemplate.name,
-        pageName: env.gophish.landingPage,
-        url: env.gophish.phishUrl,
-      });
+      for (const [key, groupEmps] of groups) {
+        const tpl = byKey.get(key);
+        const ref = `redflag-${campaign.id}-${key}-${Date.now()}`;
+        const group = await gophishClient.createGroup(ref, groupEmps);
+        const gophishTemplate = await gophishClient.createTemplate(ref, tpl.subject, tpl.body);
+        const gc = await gophishClient.createCampaign({
+          name: `${ref}-${campaign.name}`,
+          groupName: group.name,
+          templateName: gophishTemplate.name,
+          pageName: env.gophish.landingPage,
+          url: env.gophish.phishUrl,
+        });
+        sends.push({ key, gophishCampaignId: gc.id, employees: groupEmps });
+      }
     } catch (err) {
       throw new LaunchError(
         502,
@@ -430,71 +520,81 @@ async function launchCampaign(campaign, organizationId, departmentId) {
       );
     }
 
+    // Keep the first Gophish id on the campaign for back-compatibility; record
+    // every sub-send so the webhook can resolve events from any of them.
     await db.query(
-      `UPDATE simulation_campaigns SET status = $1, gophish_campaign_id = $2, launched_at = now(),
-         failure_reason = NULL
-       WHERE id = $3`,
-      ['running', gophishCampaign.id, campaign.id],
+      `UPDATE simulation_campaigns SET status = 'running', gophish_campaign_id = $1,
+         launched_at = now(), failure_reason = NULL WHERE id = $2`,
+      [sends[0].gophishCampaignId, campaign.id],
     );
-
-    await Promise.all(
-      employees.map((emp) =>
-        db.query(
-          `INSERT INTO simulation_attempts (campaign_id, employee_id) VALUES ($1, $2)
-           ON CONFLICT (campaign_id, employee_id) DO NOTHING`,
-          [campaign.id, emp.id],
+    for (const send of sends) {
+      await db.query(
+        `INSERT INTO campaign_gophish_sends (campaign_id, gophish_campaign_id, template_key)
+         VALUES ($1, $2, $3)`,
+        [campaign.id, send.gophishCampaignId, send.key],
+      );
+      await Promise.all(
+        send.employees.map((emp) =>
+          db.query(
+            `INSERT INTO simulation_attempts (campaign_id, employee_id, template_key)
+             VALUES ($1, $2, $3)
+             ON CONFLICT (campaign_id, employee_id)
+             DO UPDATE SET template_key = EXCLUDED.template_key`,
+            [campaign.id, emp.id, send.key],
+          ),
         ),
-      ),
-    );
-  } else {
-    const targeted = employees.filter((emp) => emp.phoneNumber);
-    if (targeted.length === 0)
-      throw new LaunchError(400, 'No employees with a phone number to target');
-
-    // sent_at is only set after smsClient.sendSms actually resolves — a failed
-    // send (e.g. AT credentials not configured) must not leave an attempt
-    // row that falsely claims the message went out.
-    const outcomes = await Promise.allSettled(
-      targeted.map(async (emp) => {
-        const { rows } = await db.query(
-          `INSERT INTO simulation_attempts (campaign_id, employee_id) VALUES ($1, $2)
-           ON CONFLICT (campaign_id, employee_id) DO NOTHING
-           RETURNING tracking_token AS "trackingToken"`,
-          [campaign.id, emp.id],
-        );
-        const trackingToken =
-          rows[0]?.trackingToken ||
-          (
-            await db.query(
-              'SELECT tracking_token AS "trackingToken" FROM simulation_attempts WHERE campaign_id = $1 AND employee_id = $2',
-              [campaign.id, emp.id],
-            )
-          ).rows[0].trackingToken;
-
-        const trackingUrl = `${env.publicBackendUrl}/api/campaigns/track/${trackingToken}`;
-        const message = template.body.replace('{{link}}', trackingUrl);
-        await smsClient.sendSms(emp.phoneNumber, message);
-        await db.query(
-          'UPDATE simulation_attempts SET sent_at = now() WHERE campaign_id = $1 AND employee_id = $2',
-          [campaign.id, emp.id],
-        );
-      }),
-    );
-
-    const sentCount = outcomes.filter((o) => o.status === 'fulfilled').length;
-    if (sentCount === 0) {
-      const [firstFailure] = outcomes;
-      throw new LaunchError(502, 'Failed to send any SMS messages', firstFailure.reason?.message);
+      );
     }
-
-    await db.query(
-      'UPDATE simulation_campaigns SET status = $1, launched_at = now(), failure_reason = NULL WHERE id = $2',
-      ['running', campaign.id],
-    );
-    return `Campaign launched (${sentCount}/${targeted.length} messages sent)`;
+    const variants = groups.size;
+    return `Email campaign launched (${employees.length} recipients${variants > 1 ? `, ${variants} message variants` : ''})`;
   }
 
-  return 'Campaign launched';
+  const targeted = employees.filter((emp) => emp.phoneNumber);
+  if (targeted.length === 0)
+    throw new LaunchError(400, 'No employees with a phone number to target');
+  const assignment = assignVariants(
+    targeted.map((e) => e.id),
+    poolKeys,
+    campaign.id,
+  );
+
+  // sent_at is only set after smsClient.sendSms actually resolves — a failed
+  // send (e.g. AT credentials not configured) must not leave an attempt row that
+  // falsely claims the message went out. Each recipient gets their assigned
+  // variant, so the batch is not identical across the department/org.
+  const outcomes = await Promise.allSettled(
+    targeted.map(async (emp) => {
+      const key = assignment.get(emp.id);
+      const tpl = byKey.get(key);
+      const { rows } = await db.query(
+        `INSERT INTO simulation_attempts (campaign_id, employee_id, template_key) VALUES ($1, $2, $3)
+         ON CONFLICT (campaign_id, employee_id) DO UPDATE SET template_key = EXCLUDED.template_key
+         RETURNING tracking_token AS "trackingToken"`,
+        [campaign.id, emp.id, key],
+      );
+      const trackingToken = rows[0].trackingToken;
+      const trackingUrl = `${env.publicBackendUrl}/api/campaigns/track/${trackingToken}`;
+      const message = tpl.body.replace('{{link}}', trackingUrl);
+      await smsClient.sendSms(emp.phoneNumber, message);
+      await db.query(
+        'UPDATE simulation_attempts SET sent_at = now() WHERE campaign_id = $1 AND employee_id = $2',
+        [campaign.id, emp.id],
+      );
+    }),
+  );
+
+  const sentCount = outcomes.filter((o) => o.status === 'fulfilled').length;
+  if (sentCount === 0) {
+    const [firstFailure] = outcomes;
+    throw new LaunchError(502, 'Failed to send any SMS messages', firstFailure.reason?.message);
+  }
+
+  await db.query(
+    "UPDATE simulation_campaigns SET status = 'running', launched_at = now(), failure_reason = NULL WHERE id = $1",
+    [campaign.id],
+  );
+  const variants = new Set(poolKeys).size;
+  return `Campaign launched (${sentCount}/${targeted.length} messages sent${variants > 1 ? `, ${variants} variants` : ''})`;
 }
 
 // Moves a campaign into 'launching' in one statement, so a double-click or a
@@ -655,3 +755,4 @@ router.get('/:id/results', ...requireAdmin, async (req, res, next) => {
 
 module.exports = router;
 module.exports.launchDueCampaigns = launchDueCampaigns;
+module.exports.trackClick = trackClick;

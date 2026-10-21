@@ -11,6 +11,9 @@ if (INSECURE_SECRETS.includes(jwtSecret)) {
 
 module.exports = {
   port: process.env.PORT || 4000,
+  // Internet-facing listener (publicApp.js). Carries ONLY the click-tracking
+  // endpoint; the admin API never binds here. Only this port is tunnelled.
+  publicPort: process.env.PUBLIC_PORT || 4001,
   jwtSecret: jwtSecret || 'change-me',
   db: {
     host: process.env.DB_HOST || 'localhost',

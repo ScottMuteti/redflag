@@ -1,13 +1,15 @@
 /* eslint-disable react/prop-types -- page-local components */
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, Mail, MessageSquare, Rocket, Save } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Mail, MessageSquare, Rocket, Save, Sparkles } from 'lucide-react';
 import {
   createCampaign,
+  createTemplate,
   customizeTemplate,
   launchCampaign,
   listTemplates,
 } from '../../api/campaigns';
+import { generate, draftToTemplatePayload, channelsFor, CATEGORIES } from '../../content/generator';
 import { listDepartments, listEmployees } from '../../api/employees';
 import {
   Badge,
@@ -61,6 +63,121 @@ export function TemplatePreview({ template, subject, body }) {
   );
 }
 
+// Internal sample generator panel. Produces editable draft options client-side
+// (no network, no external AI); saving a chosen draft persists it as a reusable
+// org template via the normal API and selects it for the campaign.
+function GeneratePanel({ channel, difficulty, onSaved }) {
+  const toast = useToast();
+  const categories = useMemo(
+    () => CATEGORIES.filter((c) => channelsFor(c).includes(channel)),
+    [channel],
+  );
+  const [open, setOpen] = useState(false);
+  const [category, setCategory] = useState(categories[0]);
+  // Seed from the campaign's chosen difficulty; "any" mixes levels in the batch.
+  const [level, setLevel] = useState(difficulty || 'any');
+  const [drafts, setDrafts] = useState([]);
+  const [savingId, setSavingId] = useState(null);
+
+  // Keep the category valid when the channel changes.
+  if (!categories.includes(category) && categories[0]) setCategory(categories[0]);
+
+  function runGenerate() {
+    setDrafts(generate({ category, channel, difficulty: level, count: 5 }));
+  }
+
+  function editDraft(id, patch) {
+    setDrafts((list) => list.map((d) => (d.id === id ? { ...d, ...patch } : d)));
+  }
+
+  async function saveDraft(draft) {
+    setSavingId(draft.id);
+    try {
+      const created = await createTemplate(draftToTemplatePayload(draft));
+      toast.success('Saved to your templates');
+      onSaved(created);
+      setDrafts((list) => list.filter((d) => d.id !== draft.id));
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Could not save template');
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  return (
+    <div className="rounded-control border border-dashed border-line p-3">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center gap-2 text-left text-xs font-semibold text-brand-700"
+      >
+        <Sparkles size={14} aria-hidden="true" />
+        Generate example messages
+      </button>
+      {open && (
+        <div className="mt-3 grid gap-3">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            <Select value={category} onChange={(e) => setCategory(e.target.value)} aria-label="Category">
+              {categories.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </Select>
+            <Select value={level} onChange={(e) => setLevel(e.target.value)} aria-label="Difficulty">
+              <option value="any">Any level (mixed)</option>
+              <option value="easy">Easy</option>
+              <option value="medium">Medium</option>
+              <option value="hard">Hard</option>
+            </Select>
+            <Button type="button" icon={Sparkles} onClick={runGenerate}>
+              Generate 5
+            </Button>
+          </div>
+          {drafts.length > 0 && (
+            <p className="text-xs text-ink-3">
+              Edit any option, then save it to reuse and select it for this campaign.
+            </p>
+          )}
+          <div className="grid gap-3">
+            {drafts.map((d) => (
+              <div key={d.id} className="grid gap-2 rounded-control border border-line p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-semibold text-ink-2 capitalize">{d.name}</span>
+                  <Badge tone={DIFFICULTY_TONE[d.difficulty] || 'neutral'}>{d.difficulty}</Badge>
+                </div>
+                {d.type === 'email' && (
+                  <Input
+                    value={d.subject}
+                    onChange={(e) => editDraft(d.id, { subject: e.target.value })}
+                    aria-label="Subject"
+                  />
+                )}
+                <Textarea
+                  rows={d.type === 'sms' ? 3 : 6}
+                  value={d.body}
+                  onChange={(e) => editDraft(d.id, { body: e.target.value })}
+                  aria-label="Message body"
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  icon={Save}
+                  loading={savingId === d.id}
+                  className="justify-self-start"
+                  onClick={() => saveDraft(d)}
+                >
+                  Save &amp; use
+                </Button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function NewCampaignPage() {
   const navigate = useNavigate();
   const toast = useToast();
@@ -73,11 +190,16 @@ function NewCampaignPage() {
     departmentId: '',
     when: 'now',
     scheduledAt: '',
+    mix: false,
+    pool: [], // template keys when mix is on; each recipient gets one at random
   });
   const [edits, setEdits] = useState({});
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(null);
   const [authorised, setAuthorised] = useState(false);
+  // Templates created from generated drafts this session, merged in so they are
+  // selectable immediately without waiting for the background reload.
+  const [savedTemplates, setSavedTemplates] = useState([]);
 
   const { data, error, loading, reload } = useAsync(() =>
     Promise.all([listTemplates(), listDepartments(), listEmployees()]).then(
@@ -86,8 +208,23 @@ function NewCampaignPage() {
   );
 
   const set = (name) => (e) => setForm((f) => ({ ...f, [name]: e.target.value }));
-  const templates = (data?.templates || []).filter((t) => t.type === form.type);
-  const template = data?.templates.find((t) => t.key === form.templateKey);
+  const allTemplates = useMemo(() => {
+    const base = data?.templates || [];
+    const keys = new Set(base.map((t) => t.key));
+    return [...base, ...savedTemplates.filter((t) => !keys.has(t.key))];
+  }, [data, savedTemplates]);
+  const templates = allTemplates.filter((t) => t.type === form.type);
+  const template = allTemplates.find((t) => t.key === form.templateKey);
+
+  function handleGeneratedSaved(created) {
+    setSavedTemplates((prev) => [created, ...prev]);
+    setForm((f) => ({
+      ...f,
+      templateKey: created.key,
+      difficultyLevel: created.difficultyLevel || f.difficultyLevel,
+    }));
+    reload();
+  }
   const edited = template && edits[template.key];
   const subject = edited?.subject ?? template?.subject ?? '';
   const body = edited?.body ?? template?.body ?? '';
@@ -105,8 +242,10 @@ function NewCampaignPage() {
   function validate(current) {
     const next = {};
     if (current === 0 && !form.name.trim()) next.name = 'Give the campaign a name';
-    if (current === 1 && !form.templateKey) next.templateKey = 'Pick a template';
-    if (current === 1 && form.type === 'sms' && !body.includes('{{link}}'))
+    if (current === 1 && form.mix && form.pool.length < 2)
+      next.templateKey = 'Pick at least two templates for a mixed batch';
+    if (current === 1 && !form.mix && !form.templateKey) next.templateKey = 'Pick a template';
+    if (current === 1 && !form.mix && form.type === 'sms' && !body.includes('{{link}}'))
       next.body = 'SMS body must contain {{link}}';
     if (current === 2 && audience.reachable === 0)
       next.audience = 'No one in this audience can be reached';
@@ -131,11 +270,13 @@ function NewCampaignPage() {
     }
     setSaving(mode);
     try {
-      if (edited) await customizeTemplate(template.key, { subject, body });
+      // Inline edits only apply to a single chosen template, not a mixed pool.
+      if (!form.mix && edited) await customizeTemplate(template.key, { subject, body });
       const campaign = await createCampaign({
         name: form.name.trim(),
         type: form.type,
-        templateKey: form.templateKey,
+        templateKey: form.mix ? form.pool[0] : form.templateKey,
+        templatePool: form.mix ? form.pool : undefined,
         difficultyLevel: form.difficultyLevel,
         departmentId: form.departmentId ? Number(form.departmentId) : undefined,
         scheduledAt:
@@ -216,7 +357,9 @@ function NewCampaignPage() {
                           name="channel"
                           value={value}
                           checked={form.type === value}
-                          onChange={() => setForm((f) => ({ ...f, type: value, templateKey: '' }))}
+                          onChange={() =>
+                            setForm((f) => ({ ...f, type: value, templateKey: '', pool: [] }))
+                          }
                           className="sr-only"
                         />
                         <Icon size={18} className="mt-0.5 text-brand-700" aria-hidden="true" />
@@ -241,9 +384,30 @@ function NewCampaignPage() {
             {step === 1 && (
               <div className="grid gap-5 lg:grid-cols-2">
                 <div className="grid content-start gap-2">
-                  <p className="text-xs font-semibold text-ink-2">
-                    {form.type === 'sms' ? 'SMS' : 'Email'} templates
-                  </p>
+                  <GeneratePanel
+                    channel={form.type}
+                    difficulty={form.difficultyLevel}
+                    onSaved={handleGeneratedSaved}
+                  />
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-semibold text-ink-2">
+                      {form.type === 'sms' ? 'SMS' : 'Email'} templates
+                    </p>
+                    <label className="flex cursor-pointer items-center gap-2 text-xs text-ink-2">
+                      <input
+                        type="checkbox"
+                        checked={form.mix}
+                        onChange={(e) => setForm((f) => ({ ...f, mix: e.target.checked }))}
+                      />
+                      Mixed batch
+                    </label>
+                  </div>
+                  {form.mix && (
+                    <p className="text-xs text-ink-3">
+                      Pick two or more. Each recipient gets a different one at random, so the drill
+                      is not an identical message to everyone.
+                    </p>
+                  )}
                   {templates.length === 0 && (
                     <p className="text-body text-ink-3">
                       No templates for this channel.{' '}
@@ -257,15 +421,24 @@ function NewCampaignPage() {
                       key={t.key}
                       type="button"
                       onClick={() =>
-                        setForm((f) => ({
-                          ...f,
-                          templateKey: t.key,
-                          difficultyLevel: t.difficultyLevel || f.difficultyLevel,
-                        }))
+                        setForm((f) =>
+                          f.mix
+                            ? {
+                                ...f,
+                                pool: f.pool.includes(t.key)
+                                  ? f.pool.filter((k) => k !== t.key)
+                                  : [...f.pool, t.key],
+                              }
+                            : {
+                                ...f,
+                                templateKey: t.key,
+                                difficultyLevel: t.difficultyLevel || f.difficultyLevel,
+                              },
+                        )
                       }
                       className={cn(
                         'flex items-center justify-between gap-3 rounded-control border p-3 text-left transition',
-                        form.templateKey === t.key
+                        (form.mix ? form.pool.includes(t.key) : form.templateKey === t.key)
                           ? 'border-2 border-brand-700 bg-brand-50'
                           : 'border-line hover:bg-brand-50',
                       )}
@@ -286,7 +459,37 @@ function NewCampaignPage() {
                     <p className="text-xs text-danger">{errors.templateKey}</p>
                   )}
                 </div>
-                {template && (
+                {form.mix && (
+                  <div className="grid content-start gap-2">
+                    <p className="text-xs font-semibold text-ink-2">
+                      Pool ({form.pool.length} selected)
+                    </p>
+                    {form.pool.length === 0 ? (
+                      <p className="text-body text-ink-3">
+                        Select templates on the left to build the batch.
+                      </p>
+                    ) : (
+                      form.pool.map((key) => {
+                        const t = allTemplates.find((x) => x.key === key);
+                        return (
+                          <div
+                            key={key}
+                            className="flex items-center justify-between gap-2 rounded-control border border-line p-2.5"
+                          >
+                            <span className="truncate text-body text-ink">{t?.name || key}</span>
+                            <Badge tone={DIFFICULTY_TONE[t?.difficultyLevel] || 'neutral'}>
+                              {t?.difficultyLevel || 'medium'}
+                            </Badge>
+                          </div>
+                        );
+                      })
+                    )}
+                    <p className="text-xs text-ink-3">
+                      Recipients are split evenly and at random across these messages.
+                    </p>
+                  </div>
+                )}
+                {!form.mix && template && (
                   <div className="grid content-start gap-3">
                     <TemplatePreview template={template} subject={subject} body={body} />
                     {template.type === 'email' && (
@@ -362,7 +565,7 @@ function NewCampaignPage() {
                   {[
                     ['Name', form.name],
                     ['Channel', form.type === 'sms' ? 'SMS' : 'Email'],
-                    ['Template', template?.name],
+                    ['Template', form.mix ? `Mixed batch · ${form.pool.length} variants` : template?.name],
                     ['Difficulty', form.difficultyLevel],
                     [
                       'Audience',

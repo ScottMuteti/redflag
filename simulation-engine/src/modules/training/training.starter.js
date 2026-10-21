@@ -290,4 +290,306 @@ module.exports = [
       },
     ],
   },
+  {
+    title: 'Fake bank alerts and account locks',
+    category: 'bank',
+    estimatedMinutes: 6,
+    description: 'How attackers fake messages from Kenyan banks to rush you into clicking.',
+    lessons: [
+      {
+        type: 'read',
+        title: 'Why banks are impersonated',
+        body: [
+          'A message that your account is locked or under review creates fear, and fear makes people click before thinking.',
+          'Banks do not restore access or confirm transactions through a link in an SMS or email. They ask you to use the official app, USSD, or a branch.',
+        ],
+        tips: [
+          'Reach your bank only through the number on the back of your card or the official app.',
+          'A genuine alert never needs your PIN, OTP, or full card number.',
+        ],
+      },
+      {
+        type: 'spot',
+        title: 'Find the red flags',
+        intro: 'Tap the parts of this email that should make you suspicious.',
+        message: {
+          channel: 'email',
+          from: 'security@equity-online-ke.com',
+          parts: [
+            { text: 'Dear customer, ', flag: 'Generic greeting. Your bank knows your name.' },
+            { text: 'your account was locked after a login from a new device. ' },
+            { text: 'Restore access within 1 hour', flag: 'Artificial deadline to rush you.' },
+            { text: ' at ' },
+            { text: 'equity-online-ke.com', flag: 'Look-alike domain, not the real bank site.' },
+          ],
+        },
+        senderFlag: 'The sender domain imitates the bank but is not official.',
+      },
+      {
+        type: 'choice',
+        title: 'What would you do?',
+        scenario: 'An SMS says your account is locked and links you to restore access.',
+        options: [
+          { label: 'Click the link and log in to unlock it', correct: false, feedback: 'The link leads to a fake login that steals your credentials.' },
+          { label: 'Open the official banking app or call the number on your card', correct: true, feedback: 'Right. Verify through a channel you trust, not the message.' },
+          { label: 'Reply with your account number to speed it up', correct: false, feedback: 'Never share account details in reply to an unsolicited message.' },
+        ],
+      },
+    ],
+    quiz: [
+      { question: 'How should you reach your bank after a scary alert?', options: ['Click the link in the message', 'Use the official app or the number on your card', 'Reply to the SMS'], correctIndex: 1 },
+      { question: 'Which detail proves a bank message is fake?', options: ['It greets you by name', 'It asks for your PIN or OTP', 'It shows the bank logo'], correctIndex: 1 },
+    ],
+  },
+  {
+    title: 'IT and help-desk scams',
+    category: 'it-support',
+    estimatedMinutes: 6,
+    description: 'Password-expiry, storage-full and MFA re-enrolment lures that target staff logins.',
+    lessons: [
+      {
+        type: 'read',
+        title: 'Why your login is the target',
+        body: [
+          'Your work account is a key to email, files and systems, so attackers pose as IT to capture your password or MFA code.',
+          'Real IT messages do not threaten instant lockout and then send you to an outside website to keep your password.',
+        ],
+        tips: [
+          'Check with the service desk through its known channel before acting.',
+          'Look at the link destination: a real tenant login is on your own company domain.',
+        ],
+      },
+      {
+        type: 'spot',
+        title: 'Find the red flags',
+        intro: 'Tap what looks wrong in this help-desk email.',
+        message: {
+          channel: 'email',
+          from: 'it-helpdesk@m365-support.net',
+          parts: [
+            { text: 'Your password EXPIRE today', flag: 'Grammar error and manufactured urgency.' },
+            { text: '. Click to ' },
+            { text: 'keep your current password', flag: 'Real IT never asks you to keep a password via a link.' },
+            { text: ' at ' },
+            { text: 'm365-support.net', flag: 'Not your company domain.' },
+          ],
+        },
+        senderFlag: 'An outside support domain, not your internal IT.',
+      },
+      {
+        type: 'choice',
+        title: 'What would you do?',
+        scenario: 'An email says staff in your role must re-enrol MFA today or be locked out.',
+        options: [
+          { label: 'Follow the link and enter your login and MFA code', correct: false, feedback: 'This hands your credentials and code to the attacker in real time.' },
+          { label: 'Open the MFA settings yourself from the official portal, or ask IT', correct: true, feedback: 'Correct. Navigate there yourself instead of trusting the link.' },
+          { label: 'Forward it to colleagues so they are not locked out', correct: false, feedback: 'Spreading it only widens the trap. Report it to IT instead.' },
+        ],
+      },
+    ],
+    quiz: [
+      { question: 'A password-expiry email links to an outside site. You:', options: ['Enter your password to keep it', 'Go to the official portal yourself or ask IT', 'Ignore all IT emails forever'], correctIndex: 1 },
+      { question: 'What is a strong sign an IT email is fake?', options: ['It is on your company domain', 'It threatens instant lockout and links offsite', 'It has no attachment'], correctIndex: 1 },
+    ],
+  },
+  {
+    title: 'HR and payroll scams',
+    category: 'hr-payroll',
+    estimatedMinutes: 5,
+    description: 'Salary-structure and bank-detail lures that aim to redirect your pay.',
+    lessons: [
+      {
+        type: 'read',
+        title: 'Why payroll is targeted',
+        body: [
+          'A message about your salary gets attention, and confirm your bank details can quietly redirect your pay to the attacker.',
+          'Changes to pay details are handled through the official HR system or in person, never by a link in an unexpected email.',
+        ],
+        tips: [
+          'Confirm any pay-detail request face to face or through the HR system you already use.',
+          'Be wary of deadlines tied to the monthly payroll run.',
+        ],
+      },
+      {
+        type: 'spot',
+        title: 'Find the red flags',
+        intro: 'Tap the suspicious parts of this HR email.',
+        message: {
+          channel: 'email',
+          from: 'payroll@hr-portal-ke.com',
+          parts: [
+            { text: 'Confirm your bank details before Thursday', flag: 'Deadline pressure tied to payroll.' },
+            { text: ' or your salary may be delayed. ' },
+            { text: 'Update here', flag: 'Pay details should change in the official HR system, not via a link.' },
+            { text: ': hr-portal-ke.com', flag: 'External look-alike domain.' },
+          ],
+        },
+        senderFlag: 'An outside HR portal domain, not your employer.',
+      },
+      {
+        type: 'choice',
+        title: 'What would you do?',
+        scenario: 'An email asks you to confirm your payroll bank details to avoid a delayed salary.',
+        options: [
+          { label: 'Update your details through the link', correct: false, feedback: 'This can redirect your salary to an attacker account.' },
+          { label: 'Confirm with HR in person or through the official system', correct: true, feedback: 'Right. Verify pay changes through a trusted channel.' },
+          { label: 'Reply with your account number', correct: false, feedback: 'Never send bank details in reply to an unsolicited request.' },
+        ],
+      },
+    ],
+    quiz: [
+      { question: 'How are payroll bank-detail changes handled safely?', options: ['Via a link in an email', 'Through the official HR system or in person', 'By replying with your details'], correctIndex: 1 },
+      { question: 'What makes a payroll email suspicious?', options: ['It mentions payroll', 'It pressures you with a deadline and links offsite', 'It is signed by HR'], correctIndex: 1 },
+    ],
+  },
+  {
+    title: 'Parcel and delivery scams',
+    category: 'delivery',
+    estimatedMinutes: 5,
+    description: 'Fake parcel-waiting and confirm-your-address messages that ask for a fee or details.',
+    lessons: [
+      {
+        type: 'read',
+        title: 'Why delivery lures work',
+        body: [
+          'Many people are expecting something, so a parcel-waiting message feels normal and easy to act on.',
+          'Couriers do not ask for a small fee or your personal details through a random SMS link.',
+        ],
+        tips: [
+          'Track parcels only on the official courier site using your own order reference.',
+          'A tiny release fee is a classic trick to capture card details.',
+        ],
+      },
+      {
+        type: 'spot',
+        title: 'Find the red flags',
+        intro: 'Tap what should make you suspicious.',
+        message: {
+          channel: 'sms',
+          from: '+254 7XX XXX 884',
+          parts: [
+            { text: 'you have 1 parcel waiting. ', flag: 'Vague. No courier name or tracking reference.' },
+            { text: 'pay small fee of Ksh 150', flag: 'Couriers do not take release fees by SMS link.' },
+            { text: ' to release it: ' },
+            { text: 'parcel-ke.link', flag: 'Shortened, unofficial web address.' },
+          ],
+        },
+        senderFlag: 'Sent from an ordinary mobile number, not a courier.',
+      },
+      {
+        type: 'choice',
+        title: 'What would you do?',
+        scenario: 'An SMS says a parcel needs a Ksh 150 fee to be released.',
+        options: [
+          { label: 'Pay the fee so it is not returned', correct: false, feedback: 'The fee page is built to steal your card details.' },
+          { label: 'Check the official courier site with your own order reference', correct: true, feedback: 'Right. Verify independently; ignore the link.' },
+          { label: 'Reply with your card number', correct: false, feedback: 'Never share card details in response to an SMS.' },
+        ],
+      },
+    ],
+    quiz: [
+      { question: 'A parcel SMS asks for a small release fee. You:', options: ['Pay it immediately', 'Verify on the official courier site', 'Send your card number'], correctIndex: 1 },
+      { question: 'What is a tell-tale sign of a parcel scam?', options: ['It names the courier and your order', 'It is vague and asks for a fee via a link', 'It arrives on a weekday'], correctIndex: 1 },
+    ],
+  },
+  {
+    title: 'CEO and urgent-task scams',
+    category: 'ceo-fraud',
+    estimatedMinutes: 5,
+    description: 'Business email compromise: a senior name pressuring you into a quick, secret task.',
+    lessons: [
+      {
+        type: 'read',
+        title: 'Why impersonating the boss works',
+        body: [
+          'A request from a senior name, marked urgent and secret, pushes you to act without the usual checks.',
+          'Genuine leaders expect you to verify unusual money or data requests, especially when told not to call.',
+        ],
+        tips: [
+          'Any urgent and confidential money or gift-card request is a red flag.',
+          'Verify through a known phone number or in person, never by replying to the message.',
+        ],
+      },
+      {
+        type: 'spot',
+        title: 'Find the red flags',
+        intro: 'Tap the manipulative parts of this message.',
+        message: {
+          channel: 'email',
+          from: 'md.office@secure-mail-ke.com',
+          parts: [
+            { text: 'Are you at your desk? I need something handled now. ', flag: 'Urgency to bypass normal process.' },
+            { text: 'Do not call me', flag: 'Discourages the out-of-band check that would expose it.' },
+            { text: ', just use the secure note: ' },
+            { text: 'secure-mail-ke.com', flag: 'Look-alike domain, not the real executive address.' },
+          ],
+        },
+        senderFlag: 'The address imitates the MD but is an outside domain.',
+      },
+      {
+        type: 'choice',
+        title: 'What would you do?',
+        scenario: 'The MD emails you urgently to buy gift cards and send the codes, and says not to call.',
+        options: [
+          { label: 'Buy them quickly because it is the MD', correct: false, feedback: 'Urgency plus a senior name is the core of this scam.' },
+          { label: 'Call the MD on their known number to confirm', correct: true, feedback: 'Correct. Verify out of band before acting.' },
+          { label: 'Reply to the email to confirm the amount', correct: false, feedback: 'The reply goes straight to the attacker.' },
+        ],
+      },
+    ],
+    quiz: [
+      { question: 'An urgent do-not-call request from the boss should make you:', options: ['Act fast to impress them', 'Verify on a known number first', 'Reply to confirm'], correctIndex: 1 },
+      { question: 'A hallmark of CEO fraud is:', options: ['A detailed, routine request', 'Secrecy, urgency and a senior name', 'A request sent to the whole team'], correctIndex: 1 },
+    ],
+  },
+  {
+    title: 'SACCO dividend and loan scams',
+    category: 'sacco',
+    estimatedMinutes: 5,
+    description: 'Fake dividend and loan-approval messages that ask you to update payout details.',
+    lessons: [
+      {
+        type: 'read',
+        title: 'Why SACCO members are targeted',
+        body: [
+          'Dividends and loan approvals are welcome news, so a message about them lowers your guard.',
+          'Your SACCO already holds your payout details, so a message asking you to update them through a link is a warning sign.',
+        ],
+        tips: [
+          'Confirm dividends or loans through the official SACCO office or app.',
+          'Good news used to rush you is still a pressure tactic.',
+        ],
+      },
+      {
+        type: 'spot',
+        title: 'Find the red flags',
+        intro: 'Tap the suspicious parts of this SMS.',
+        message: {
+          channel: 'sms',
+          from: '+254 7XX XXX 512',
+          parts: [
+            { text: 'Your SACCO dividend is ready. ', flag: 'No SACCO name or member number.' },
+            { text: 'Update your payout details', flag: 'Your SACCO already has these, so no link update is needed.' },
+            { text: ' to receive it: ' },
+            { text: 'sacco-pay.ke.link', flag: 'Unofficial shortened web address.' },
+          ],
+        },
+        senderFlag: 'Sent from an ordinary mobile number, not your SACCO.',
+      },
+      {
+        type: 'choice',
+        title: 'What would you do?',
+        scenario: 'An SMS says your SACCO dividend is ready once you update your payout details.',
+        options: [
+          { label: 'Update the details through the link', correct: false, feedback: 'The page harvests your details or redirects your money.' },
+          { label: 'Confirm with the SACCO office or official app', correct: true, feedback: 'Right. Verify through the channel you already use.' },
+          { label: 'Share your member number and ID in reply', correct: false, feedback: 'Never share identity details in response to an unsolicited SMS.' },
+        ],
+      },
+    ],
+    quiz: [
+      { question: 'A dividend SMS asks you to update payout details. You:', options: ['Update via the link', 'Confirm with the SACCO office or app', 'Reply with your ID number'], correctIndex: 1 },
+      { question: 'Why do dividend and loan scams work?', options: ['They use good news to lower your guard', 'They are always poorly written', 'They never mention money'], correctIndex: 0 },
+    ],
+  },
 ];

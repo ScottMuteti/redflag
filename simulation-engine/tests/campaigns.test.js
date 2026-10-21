@@ -57,7 +57,7 @@ describe('campaigns routes', () => {
 
   it('launches an email campaign via the Gophish client', async () => {
     const campaign = { id: 1, name: 'Safaricom Drill', type: 'email', templateKey: 'safaricom-impersonation', status: 'launching' };
-    const template = { type: 'email', subject: 'Verify now', body: '<a href="{{.URL}}">verify</a>' };
+    const template = { key: 'safaricom-impersonation', type: 'email', subject: 'Verify now', body: '<a href="{{.URL}}">verify</a>' };
     const employees = [{ id: 10, fullName: 'Employee One', email: 'emp1@acme.co.ke', phoneNumber: null, jobTitle: 'Analyst' }];
 
     mockQueries([
@@ -84,7 +84,7 @@ describe('campaigns routes', () => {
 
   it('launches an SMS campaign with a per-employee tracking link', async () => {
     const campaign = { id: 2, name: 'Mpesa SMS Drill', type: 'sms', templateKey: 'mpesa-alert', status: 'launching' };
-    const template = { type: 'sms', subject: null, body: 'M-PESA alert: {{link}}' };
+    const template = { key: 'mpesa-alert', type: 'sms', subject: null, body: 'M-PESA alert: {{link}}' };
     const employees = [{ id: 20, fullName: 'Employee Two', email: 'emp2@acme.co.ke', phoneNumber: '+254711111111', jobTitle: null }];
 
     mockQueries([
@@ -106,6 +106,44 @@ describe('campaigns routes', () => {
       expect.stringContaining('/api/campaigns/track/tok-123'),
     );
     expect(gophishClient.createGroup).not.toHaveBeenCalled();
+  });
+
+  it('mixed batch: sends a different template variant to each recipient', async () => {
+    const campaign = {
+      id: 9,
+      name: 'Mixed SMS',
+      type: 'sms',
+      templateKey: 'mpesa-alert',
+      templatePool: ['mpesa-alert', 'mpesa-sms-hard'],
+      status: 'launching',
+    };
+    const templates = [
+      { key: 'mpesa-alert', type: 'sms', subject: null, body: 'VARIANT ONE {{link}}' },
+      { key: 'mpesa-sms-hard', type: 'sms', subject: null, body: 'VARIANT TWO {{link}}' },
+    ];
+    const employees = [
+      { id: 20, phoneNumber: '+254700000001' },
+      { id: 21, phoneNumber: '+254700000002' },
+    ];
+    mockQueries([
+      ["SET status = 'launching'", () => ({ rows: [campaign] })],
+      ['FROM campaign_templates', () => ({ rows: templates })],
+      ['FROM employees WHERE organization_id', () => ({ rows: employees })],
+      ['INSERT INTO simulation_attempts', () => ({ rows: [{ trackingToken: 'tok' }] })],
+      ['UPDATE simulation_campaigns', () => ({ rowCount: 1 })],
+    ]);
+
+    const res = await request(app)
+      .post('/api/campaigns/9/launch')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ acknowledgeAuthorisation: true });
+
+    expect(res.statusCode).toBe(200);
+    expect(smsClient.sendSms).toHaveBeenCalledTimes(2);
+    const bodies = smsClient.sendSms.mock.calls.map((c) => c[1]);
+    // Each recipient got a different variant — the batch is not identical.
+    expect(bodies.some((b) => b.includes('VARIANT ONE'))).toBe(true);
+    expect(bodies.some((b) => b.includes('VARIANT TWO'))).toBe(true);
   });
 
   it('blocks launch without the authorisation acknowledgement', async () => {
@@ -132,7 +170,7 @@ describe('campaigns routes', () => {
     const campaign = { id: 5, name: 'X', type: 'email', templateKey: 'kra-notice', status: 'launching' };
     mockQueries([
       ["SET status = 'launching'", () => ({ rows: [campaign] })],
-      ['FROM campaign_templates', () => ({ rows: [{ type: 'email', subject: 's', body: 'b' }] })],
+      ['FROM campaign_templates', () => ({ rows: [{ key: 'kra-notice', type: 'email', subject: 's', body: 'b' }] })],
       ['FROM employees WHERE organization_id', () => ({ rows: [{ id: 1, fullName: 'A B', email: 'a@x.co.ke' }] })],
     ]);
     gophishClient.createGroup.mockRejectedValue(new Error('connect ECONNREFUSED'));
@@ -221,7 +259,7 @@ describe('launchDueCampaigns', () => {
     mockQueries([
       ["status = 'scheduled' AND scheduled_at", () => ({ rows: [{ id: 7, organizationId: 1 }] })],
       ["SET status = 'launching'", () => ({ rows: [due] })],
-      ['FROM campaign_templates', () => ({ rows: [{ type: 'sms', body: 'Hi {{link}}' }] })],
+      ['FROM campaign_templates', () => ({ rows: [{ key: 'mpesa-alert', type: 'sms', body: 'Hi {{link}}' }] })],
       ['FROM employees', () => ({ rows: [{ id: 10, phoneNumber: '+254700000000' }] })],
       ['INSERT INTO simulation_attempts', () => ({ rows: [{ trackingToken: 'tok' }] })],
     ]);

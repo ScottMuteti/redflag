@@ -1,5 +1,6 @@
 require('dotenv').config();
 const app = require('./app');
+const publicApp = require('./publicApp');
 const env = require('./config/env');
 const { migrate } = require('./db/migrate');
 const { launchDueCampaigns } = require('./modules/campaigns/campaigns.routes');
@@ -18,7 +19,13 @@ async function start() {
   }
 
   app.listen(env.port, () => {
-    console.log(`RedFlag simulation-engine listening on port ${env.port}`);
+    console.log(`RedFlag simulation-engine (admin API) listening on port ${env.port}`);
+  });
+
+  // Separate internet-facing listener: only the click-tracking endpoint. This
+  // is the sole port exposed through the public tunnel (see src/publicApp.js).
+  publicApp.listen(env.publicPort, () => {
+    console.log(`RedFlag public surface listening on port ${env.publicPort}`);
   });
 
   // Scheduled campaign launcher — kept out of app.js so tests don't start timers.
