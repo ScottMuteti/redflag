@@ -183,6 +183,22 @@ describe('campaigns routes', () => {
     expect(res.statusCode).toBe(400);
   });
 
+  it('stores injection-style template input as a parameter, not inline SQL', async () => {
+    const nasty = `<script>alert(1)</script>'; DROP TABLE employees;--`;
+    db.query.mockResolvedValueOnce({ rows: [{ key: 'mpesa-alert', body: nasty }] });
+
+    const res = await request(app)
+      .put('/api/campaigns/templates/mpesa-alert')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ body: nasty });
+
+    expect(res.statusCode).toBe(200);
+    // Passed as a bound parameter verbatim (parameterised query), never concatenated into SQL.
+    const [sql, params] = db.query.mock.calls[0];
+    expect(params).toContain(nasty);
+    expect(sql).not.toContain('DROP TABLE');
+  });
+
   it('saves an org copy of a template', async () => {
     db.query.mockResolvedValueOnce({ rows: [{ key: 'mpesa-alert', body: 'Custom {{link}}', isCustom: true }] });
 

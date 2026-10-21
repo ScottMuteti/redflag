@@ -155,7 +155,7 @@ router.get('/employee/:id', async (req, res, next) => {
   try {
     const [scoreResult, attemptsResult, assignmentsResult, reportsResult] = await Promise.all([
       db.query(
-        `SELECT score, risk_level AS "riskLevel", computed_at AS "computedAt"
+        `SELECT score, risk_level AS "riskLevel", model_version AS "modelVersion", low_data AS "lowData", computed_at AS "computedAt"
          FROM susceptibility_scores
          JOIN employees ON employees.id = susceptibility_scores.employee_id
          WHERE susceptibility_scores.employee_id = $1 AND employees.organization_id = $2

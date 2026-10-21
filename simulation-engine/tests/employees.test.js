@@ -119,4 +119,14 @@ describe('POST /api/employees/import', () => {
       .send({});
     expect(res.statusCode).toBe(400);
   });
+
+  it('rejects a payload larger than 1 MB with 413', async () => {
+    const huge = 'x'.repeat(1024 * 1024 + 50);
+    const res = await request(app)
+      .post('/api/employees/import')
+      .set('Authorization', `Bearer ${token}`)
+      .set('Content-Type', 'application/json')
+      .send(JSON.stringify({ csv: huge }));
+    expect(res.statusCode).toBe(413);
+  });
 });
