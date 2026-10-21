@@ -32,14 +32,16 @@ async function createTemplate(name, subject, htmlBody) {
   return data;
 }
 
-// Not called on every launch (a shared landing page is expected to already exist in
-// Gophish, named env.gophish.landingPage) — exposed for one-off provisioning/setup.
+// Not called on every launch (the shared awareness landing page is provisioned
+// once by setup.js, named env.gophish.landingPage) — exposed for ad-hoc setup.
+// RedFlag never captures what a target types: this is an awareness drill, so a
+// submission is recorded only as an event, never with its values.
 async function createLandingPage(name, htmlBody) {
   const { data } = await client.post('/api/pages/', {
     name,
     html: htmlBody,
-    capture_credentials: true,
-    capture_passwords: true,
+    capture_credentials: false,
+    capture_passwords: false,
   });
   return data;
 }
