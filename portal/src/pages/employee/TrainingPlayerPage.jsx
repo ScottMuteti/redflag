@@ -1,5 +1,5 @@
 /* eslint-disable react/prop-types -- page-local components */
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -15,7 +15,7 @@ import {
   Search,
   XCircle,
 } from 'lucide-react';
-import { listAssignments, saveLessonProgress, submitQuiz } from '../../api/training';
+import { listAssignments, saveLessonProgress, startQuiz, submitQuiz } from '../../api/training';
 import {
   Badge,
   Button,
@@ -56,7 +56,8 @@ function ReadLesson({ lesson, onReady }) {
 }
 
 // Sample message split into parts; tapping a flagged part reveals why it's suspicious.
-function SpotLesson({ lesson, onReady }) {
+// Wrong taps, and flags still unfound when "Show me" is used, count as misses.
+function SpotLesson({ lesson, onReady, onMiss }) {
   const { message } = lesson;
   const flags = useMemo(
     () => [
@@ -73,7 +74,14 @@ function SpotLesson({ lesson, onReady }) {
 
   const tap = (id, isFlag) => {
     if (isFlag) setFound((f) => (f.includes(id) ? f : [...f, id]));
-    else setMisses((m) => m + 1);
+    else {
+      setMisses((m) => m + 1);
+      onMiss(1);
+    }
+  };
+  const reveal = () => {
+    onMiss(flags.length - found.length);
+    setRevealed(true);
   };
   const shown = (id) => found.includes(id) || revealed;
   const explanations = [
@@ -105,7 +113,7 @@ function SpotLesson({ lesson, onReady }) {
           {misses > 0 && ` · ${misses} miss${misses === 1 ? '' : 'es'}`}
         </span>
         {!done && (
-          <Button size="sm" variant="ghost" onClick={() => setRevealed(true)}>
+          <Button size="sm" variant="ghost" onClick={reveal}>
             Show me
           </Button>
         )}
@@ -156,7 +164,7 @@ function SpotLesson({ lesson, onReady }) {
   );
 }
 
-function ChoiceLesson({ lesson, onReady }) {
+function ChoiceLesson({ lesson, onReady, onMiss }) {
   const [picked, setPicked] = useState(null);
   const option = picked === null ? null : lesson.options[picked];
   useEffect(() => onReady(Boolean(option?.correct)), [option, onReady]);
@@ -170,7 +178,10 @@ function ChoiceLesson({ lesson, onReady }) {
         <button
           key={o.label}
           type="button"
-          onClick={() => setPicked(i)}
+          onClick={() => {
+            if (picked !== i && !o.correct) onMiss(1);
+            setPicked(i);
+          }}
           className={cn(
             'rounded-control border px-3 py-2.5 text-left text-body transition',
             picked === i
@@ -200,19 +211,39 @@ function ChoiceLesson({ lesson, onReady }) {
   );
 }
 
-function Quiz({ assignment, onFinished }) {
+// Questions come from the server per attempt: a retake draws a different set.
+// The result combines lesson misses and quiz answers.
+function Quiz({ assignment, onFinished, onRetake }) {
   const toast = useToast();
-  const questions = assignment.quiz || [];
-  const [answers, setAnswers] = useState(() => questions.map(() => -1));
+  const [questions, setQuestions] = useState(null);
+  const [loadError, setLoadError] = useState(null);
+  const [answers, setAnswers] = useState([]);
   const [result, setResult] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const completed = assignment.status === 'completed';
+
+  const load = useCallback(async () => {
+    setQuestions(null);
+    setLoadError(null);
+    try {
+      const res = await startQuiz(assignment.id);
+      setQuestions(res.questions);
+      setAnswers(res.questions.map(() => -1));
+    } catch (err) {
+      setLoadError(err.response?.data?.message || 'Could not load the quiz');
+    }
+  }, [assignment.id]);
+
+  useEffect(() => {
+    if (!completed) load();
+  }, [completed, load]);
 
   async function submit() {
     setSubmitting(true);
     try {
       const res = await submitQuiz(assignment.id, answers);
       setResult(res);
-      if (res.passed) onFinished();
+      onFinished();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Could not submit quiz');
     } finally {
@@ -233,55 +264,71 @@ function Quiz({ assignment, onFinished }) {
           <p className="mt-2 text-[40px] leading-none font-extrabold text-ink">
             {Math.round(result.score * 100)}%
           </p>
+          <p className="mt-2 text-xs text-ink-3">
+            Lessons {Math.round(result.lessonScore * 100)}% ({result.lessonMisses} miss
+            {result.lessonMisses === 1 ? '' : 'es'}) · Quiz {Math.round(result.quizScore * 100)}%
+          </p>
           <Badge tone={result.passed ? 'success' : 'danger'} className="mt-3">
-            {result.passed ? 'Passed, module complete' : 'Not passed. You need 80%'}
+            {result.passed ? 'Passed, module complete' : 'Failed. You need 80%'}
           </Badge>
+          {!result.passed && (
+            <p className="mt-3 text-body text-ink-2">
+              Recorded as failed. Redo the lessons, then take a new set of questions.
+            </p>
+          )}
         </div>
-        {questions.map((q, i) => {
-          const r = result.review?.[i];
-          return (
-            <div key={q.question} className="rounded-control border border-line p-3 text-body">
-              <p className="font-semibold text-ink">{q.question}</p>
-              <p
-                className={cn(
-                  'mt-1 flex items-center gap-1.5',
-                  r?.correct ? 'text-success' : 'text-danger',
-                )}
-              >
-                {r?.correct ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
-                {r?.correct
-                  ? 'Correct'
-                  : r?.correctIndex !== undefined
-                    ? `Correct answer: ${q.options[r.correctIndex]}`
-                    : 'Incorrect. Review the lessons and try again'}
-              </p>
-            </div>
-          );
-        })}
+        {result.review.map((r) => (
+          <div key={r.question} className="rounded-control border border-line p-3 text-body">
+            <p className="font-semibold text-ink">{r.question}</p>
+            <p
+              className={cn(
+                'mt-1 flex items-center gap-1.5',
+                r.correct ? 'text-success' : 'text-danger',
+              )}
+            >
+              {r.correct ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
+              {r.correct
+                ? 'Correct'
+                : r.correctIndex !== undefined
+                  ? `Correct answer: ${r.options[r.correctIndex]}`
+                  : 'Incorrect. Review the lessons and try again'}
+            </p>
+          </div>
+        ))}
         {result.passed ? (
           <Button as={Link} to="/portal/training" variant="primary" className="justify-self-start">
             Back to my training
           </Button>
         ) : (
-          <Button
-            icon={RotateCcw}
-            className="justify-self-start"
-            onClick={() => {
-              setResult(null);
-              setAnswers(questions.map(() => -1));
-            }}
-          >
-            Retake quiz
+          <Button icon={RotateCcw} className="justify-self-start" onClick={onRetake}>
+            Redo the lessons
           </Button>
         )}
       </div>
     );
   }
 
+  if (completed) {
+    return (
+      <div className="rounded-card border border-line bg-page p-6 text-center">
+        <CheckCircle2 size={36} className="mx-auto text-success" aria-hidden="true" />
+        <p className="mt-2 text-body text-ink-2">
+          Passed
+          {assignment.lastScore !== null &&
+            ` with ${Math.round(Number(assignment.lastScore) * 100)}%`}
+          {assignment.quizAttempts > 1 && ` after ${assignment.quizAttempts} attempts`}.
+        </p>
+      </div>
+    );
+  }
+
+  if (loadError) return <ErrorCard message={loadError} onRetry={load} />;
+  if (!questions) return <Skeleton className="h-60 rounded-card" />;
+
   return (
     <div className="grid gap-3">
       {questions.map((q, qi) => (
-        <fieldset key={qi} className="rounded-card border border-line p-4">
+        <fieldset key={q.question} className="rounded-card border border-line p-4">
           <legend className="px-1 text-xs font-semibold text-ink-3">
             Question {qi + 1} of {questions.length}
           </legend>
@@ -289,7 +336,7 @@ function Quiz({ assignment, onFinished }) {
           <div className="grid gap-2">
             {q.options.map((opt, oi) => (
               <label
-                key={oi}
+                key={opt}
                 className={cn(
                   'flex cursor-pointer items-center gap-3 rounded-control border px-3 py-2.5 text-body transition',
                   answers[qi] === oi
@@ -330,6 +377,11 @@ function TrainingPlayerPage() {
   const lessons = assignment?.lessons || [];
   const [step, setStep] = useState(null);
   const [ready, setReady] = useState(false);
+  // Misses made since the last saved step; sent with the next progress save.
+  const misses = useRef(0);
+  const onMiss = useCallback((n) => {
+    misses.current += n;
+  }, []);
 
   // Resume where the employee left off; completed modules open on the quiz review.
   useEffect(() => {
@@ -347,15 +399,19 @@ function TrainingPlayerPage() {
     setStep(nextStep);
     setReady(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+    const unsaved = misses.current;
+    misses.current = 0;
     try {
-      await saveLessonProgress(assignment.id, nextStep);
+      await saveLessonProgress(assignment.id, nextStep, unsaved);
     } catch {
       // Progress saving is best-effort; the lesson flow continues regardless.
     }
   }
 
   if (error) return <ErrorCard message={error} onRetry={reload} />;
-  if (loading || (assignment && step === null)) return <Skeleton className="h-80 rounded-card" />;
+  // Stay mounted while a reload refreshes data, so a quiz result stays on screen.
+  if ((loading && !data) || (assignment && step === null))
+    return <Skeleton className="h-80 rounded-card" />;
   if (!assignment) {
     return (
       <Card>
@@ -439,17 +495,25 @@ function TrainingPlayerPage() {
           </div>
 
           {onQuiz ? (
-            <Quiz assignment={assignment} onFinished={reload} />
+            <Quiz
+              assignment={assignment}
+              onFinished={reload}
+              onRetake={() => {
+                setStep(0);
+                setReady(false);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+            />
           ) : (
             <>
               {lesson.type === 'read' && (
                 <ReadLesson key={step} lesson={lesson} onReady={setReady} />
               )}
               {lesson.type === 'spot' && (
-                <SpotLesson key={step} lesson={lesson} onReady={setReady} />
+                <SpotLesson key={step} lesson={lesson} onReady={setReady} onMiss={onMiss} />
               )}
               {lesson.type === 'choice' && (
-                <ChoiceLesson key={step} lesson={lesson} onReady={setReady} />
+                <ChoiceLesson key={step} lesson={lesson} onReady={setReady} onMiss={onMiss} />
               )}
               <div className="mt-6 flex justify-between gap-2 border-t border-line pt-4">
                 <Button

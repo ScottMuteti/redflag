@@ -4,6 +4,11 @@ export function listAssignments() {
   return apiClient.get('/training/assignments').then((res) => res.data);
 }
 
+// Starts (or resumes) a quiz attempt; a retake gets a fresh draw of questions.
+export function startQuiz(assignmentId) {
+  return apiClient.post(`/training/assignments/${assignmentId}/quiz`).then((res) => res.data);
+}
+
 export function submitQuiz(assignmentId, answers) {
   return apiClient
     .post(`/training/assignments/${assignmentId}/complete`, { answers })
@@ -34,8 +39,8 @@ export function addStarterModules() {
   return apiClient.post('/training/modules/starter').then((res) => res.data);
 }
 
-export function saveLessonProgress(assignmentId, lessonProgress) {
+export function saveLessonProgress(assignmentId, lessonProgress, misses = 0) {
   return apiClient
-    .post(`/training/assignments/${assignmentId}/progress`, { lessonProgress })
+    .post(`/training/assignments/${assignmentId}/progress`, { lessonProgress, misses })
     .then((res) => res.data);
 }

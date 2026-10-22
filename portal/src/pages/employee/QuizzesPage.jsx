@@ -16,7 +16,7 @@ import { formatDateTime, formatPercent } from '../../lib/format';
 
 function QuizzesPage() {
   const { data, error, loading, reload } = useAsync(listAssignments);
-  const quizzes = (data || []).filter((a) => a.quiz?.length);
+  const quizzes = (data || []).filter((a) => a.quizLength);
   const passed = quizzes.filter((a) => a.status === 'completed').length;
   const scored = quizzes.filter((a) => a.lastScore !== null);
   const average = scored.length
@@ -30,7 +30,7 @@ function QuizzesPage() {
       sortValue: (a) => a.title,
       render: (a) => <span className="font-semibold">{a.title}</span>,
     },
-    { key: 'questions', header: 'Questions', align: 'right', render: (a) => a.quiz.length },
+    { key: 'questions', header: 'Questions', align: 'right', render: (a) => a.quizLength },
     {
       key: 'result',
       header: 'Result',
@@ -38,8 +38,8 @@ function QuizzesPage() {
       render: (a) =>
         a.status === 'completed' ? (
           <Badge tone="success">Passed</Badge>
-        ) : a.quizAttempts > 0 ? (
-          <Badge tone="danger">Not passed yet</Badge>
+        ) : a.status === 'failed' ? (
+          <Badge tone="danger">Failed</Badge>
         ) : (
           <Badge tone="neutral">Not taken</Badge>
         ),
@@ -63,7 +63,7 @@ function QuizzesPage() {
       align: 'right',
       render: (a) => (
         <Button as={Link} to={`/portal/training/${a.id}`} size="sm">
-          {a.status === 'completed' ? 'Review' : 'Take quiz'}
+          {a.status === 'completed' ? 'Review' : a.status === 'failed' ? 'Retake' : 'Take quiz'}
         </Button>
       ),
     },

@@ -402,9 +402,18 @@ function TrainingPage() {
         ) : (
           <span>
             {formatPercent(Number(a.lastScore))}
-            <span className="text-xs text-ink-3"> · {a.quizAttempts} tries</span>
+            <span className="text-xs text-ink-3">
+              {' '}
+              · {a.quizAttempts} tries{a.failedAttempts > 0 && `, ${a.failedAttempts} failed`}
+            </span>
           </span>
         ),
+    },
+    {
+      key: 'lessonMisses',
+      header: 'Lesson misses',
+      align: 'right',
+      sortValue: (a) => a.lessonMisses,
     },
     {
       key: 'assignedAt',

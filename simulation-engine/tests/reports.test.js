@@ -60,10 +60,11 @@ describe('training progress and campaign stop', () => {
     const res = await request(app)
       .post('/api/training/assignments/5/progress')
       .set('Authorization', `Bearer ${token()}`)
-      .send({ lessonProgress: 2 });
+      .send({ lessonProgress: 2, misses: 3 });
 
     expect(res.statusCode).toBe(200);
-    expect(db.query.mock.calls[1][1]).toEqual([2, 3, 5]);
+    expect(db.query.mock.calls[1][0]).toContain('lesson_misses = lesson_misses + $3');
+    expect(db.query.mock.calls[1][1]).toEqual([2, 3, 3, 5]);
   });
 
   it('blocks progress on another employee’s assignment', async () => {

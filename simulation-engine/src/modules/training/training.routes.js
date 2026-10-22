@@ -7,6 +7,8 @@ const router = express.Router();
 router.use(authenticate);
 
 const PASS_THRESHOLD = 0.8;
+// Questions drawn per attempt. Modules with a bigger bank get a different set on a retake.
+const QUIZ_SIZE = 3;
 
 const MODULE_COLUMNS = `
   training_modules.id, training_modules.title, training_modules.description,
@@ -25,9 +27,62 @@ const ASSIGNMENT_COLUMNS = `
 
 const json = (value) => (value === undefined || value === null ? null : JSON.stringify(value));
 
+// Scored lesson items: each red flag in a spot lesson, and each choice scenario.
+// Read lessons are not scored.
+const lessonItems = (lessons) =>
+  (Array.isArray(lessons) ? lessons : []).reduce((sum, lesson) => {
+    if (lesson.type === 'choice') return sum + 1;
+    if (lesson.type === 'spot') {
+      const flags = (lesson.message?.parts || []).filter((p) => p.flag).length;
+      return sum + flags + (lesson.senderFlag ? 1 : 0);
+    }
+    return sum;
+  }, 0);
+
+// Lessons and quiz pooled into one score: each lesson item is worth what a quiz
+// question is, and each miss counts against the lesson items.
+function trainingScore({ quizCorrect, quizTotal, items, misses }) {
+  const lessonScore = items > 0 ? items / (items + misses) : 1;
+  const total = quizTotal + items;
+  const score = total > 0 ? (quizCorrect + items * lessonScore) / total : 1;
+  return { score, lessonScore, quizScore: quizTotal > 0 ? quizCorrect / quizTotal : 1 };
+}
+
+const quizLength = (quiz) => Math.min(QUIZ_SIZE, Array.isArray(quiz) ? quiz.length : 0);
+
+function shuffle(items) {
+  const a = [...items];
+  for (let i = a.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// Picks QUIZ_SIZE questions from the bank, avoiding the last attempt's questions
+// where the bank allows, and shuffles each question's options. Each entry is
+// { q: bank index, order: original option index for each displayed option }.
+function drawQuiz(quiz, lastQuestions = []) {
+  const indexes = shuffle(quiz.map((_, i) => i));
+  const fresh = indexes.filter((i) => !lastQuestions.includes(i));
+  const repeats = indexes.filter((i) => lastQuestions.includes(i));
+  return [...fresh, ...repeats].slice(0, QUIZ_SIZE).map((q) => ({
+    q,
+    order: shuffle(quiz[q].options.map((_, i) => i)),
+  }));
+}
+
+const servedIsValid = (served, quiz) =>
+  Array.isArray(served) &&
+  served.length > 0 &&
+  served.every(({ q, order }) => quiz[q] && order.length === quiz[q].options.length);
+
 // Employees get questions and options only; the answer key stays on the server.
-const withoutAnswers = (quiz) =>
-  Array.isArray(quiz) ? quiz.map(({ correctIndex: _answer, ...question }) => question) : quiz;
+const presentQuiz = (served, quiz) =>
+  served.map(({ q, order }) => ({
+    question: quiz[q].question,
+    options: order.map((o) => quiz[q].options[o]),
+  }));
 
 // Auto-assigns the module for the lure the employee fell for (template
 // category, e.g. 'mpesa'). Called from campaigns.routes.js event handling,
@@ -98,12 +153,22 @@ router.post('/modules', authorize('admin'), async (req, res, next) => {
 });
 
 // Adds the built-in interactive modules the org doesn't have yet (matched by
-// category). Also run when an organisation registers.
+// category). Also run when an organisation registers. Starter modules added
+// before their question bank grew get the extra questions, unless an admin
+// has edited the quiz (any question not in the starter bank).
 async function installStarterModules(organizationId, client = db) {
   const { rows: existing } = await client.query(
-    'SELECT category FROM training_modules WHERE organization_id = $1',
+    'SELECT id, title, category, quiz FROM training_modules WHERE organization_id = $1',
     [organizationId],
   );
+  for (const row of existing) {
+    const starter = starterModules.find((m) => m.category === row.category && m.title === row.title);
+    const quiz = Array.isArray(row.quiz) ? row.quiz : [];
+    const bank = new Set(starter?.quiz.map((q) => q.question));
+    if (starter && quiz.length < starter.quiz.length && quiz.every((q) => bank.has(q.question))) {
+      await client.query('UPDATE training_modules SET quiz = $1 WHERE id = $2', [json(starter.quiz), row.id]);
+    }
+  }
   const have = new Set(existing.map((r) => r.category));
   const toAdd = starterModules.filter((m) => !have.has(m.category));
   for (const m of toAdd) {
@@ -176,21 +241,28 @@ router.get('/assignments', async (req, res, next) => {
            training_modules.id AS "trainingModuleId", training_modules.title, training_modules.description,
            training_modules.content_url AS "contentUrl", training_modules.quiz,
            training_modules.lessons, training_modules.category,
-           training_modules.estimated_minutes AS "estimatedMinutes"
+           training_modules.estimated_minutes AS "estimatedMinutes",
+         training_assignments.lesson_misses AS "lessonMisses"
          FROM training_assignments
          JOIN training_modules ON training_modules.id = training_assignments.training_module_id
          WHERE training_assignments.employee_id = $1
          ORDER BY training_assignments.assigned_at DESC`,
         [req.user.sub],
       );
-      return res.json(rows.map((row) => ({ ...row, quiz: withoutAnswers(row.quiz) })));
+      return res.json(rows.map(({ quiz, ...row }) => ({ ...row, quizLength: quizLength(quiz) })));
     }
 
     const { rows } = await db.query(
       `SELECT ${ASSIGNMENT_COLUMNS},
          training_modules.id AS "trainingModuleId", training_modules.title,
          employees.id AS "employeeId", employees.full_name AS "employeeName",
-         departments.name AS "departmentName"
+         departments.name AS "departmentName",
+         (SELECT COUNT(*)::int FROM training_quiz_attempts
+           WHERE training_quiz_attempts.assignment_id = training_assignments.id
+             AND NOT training_quiz_attempts.passed) AS "failedAttempts",
+         training_assignments.lesson_misses + (SELECT COALESCE(SUM(lesson_misses), 0)::int
+           FROM training_quiz_attempts
+           WHERE training_quiz_attempts.assignment_id = training_assignments.id) AS "lessonMisses"
        FROM training_assignments
        JOIN training_modules ON training_modules.id = training_assignments.training_module_id
        JOIN employees ON employees.id = training_assignments.employee_id
@@ -255,7 +327,10 @@ router.post('/assign', authorize('admin'), async (req, res, next) => {
 async function loadOwnAssignment(req, res) {
   const { rows } = await db.query(
     `SELECT training_assignments.id, training_assignments.employee_id AS "employeeId",
-       training_assignments.status, training_modules.quiz, training_modules.lessons
+       training_assignments.status, training_assignments.quiz_served AS "quizServed",
+       training_assignments.lesson_progress AS "lessonProgress",
+       training_assignments.lesson_misses AS "lessonMisses",
+       training_modules.quiz, training_modules.lessons
      FROM training_assignments
      JOIN employees ON employees.id = training_assignments.employee_id
      JOIN training_modules ON training_modules.id = training_assignments.training_module_id
@@ -273,11 +348,16 @@ async function loadOwnAssignment(req, res) {
   return rows[0];
 }
 
-// Saves how many lessons the employee has finished; starting a lesson marks the assignment in progress.
+// Saves how many lessons the employee has finished, plus any misses made on the
+// way; starting a lesson marks the assignment in progress.
 router.post('/assignments/:id/progress', async (req, res, next) => {
   const step = Number(req.body.lessonProgress);
+  const misses = Number(req.body.misses ?? 0);
   if (!Number.isInteger(step) || step < 0) {
     return res.status(400).json({ message: 'lessonProgress must be a whole number' });
+  }
+  if (!Number.isInteger(misses) || misses < 0 || misses > 100) {
+    return res.status(400).json({ message: 'misses must be a whole number from 0 to 100' });
   }
 
   try {
@@ -288,10 +368,11 @@ router.post('/assignments/:id/progress', async (req, res, next) => {
     const { rows } = await db.query(
       `UPDATE training_assignments
        SET lesson_progress = GREATEST(lesson_progress, LEAST($1::int, $2::int)),
+         lesson_misses = lesson_misses + $3::int,
          status = CASE WHEN status = 'assigned' THEN 'in_progress' ELSE status END
-       WHERE id = $3
+       WHERE id = $4
        RETURNING ${ASSIGNMENT_COLUMNS}`,
-      [step, total, assignment.id],
+      [step, total, misses, assignment.id],
     );
     return res.json(rows[0]);
   } catch (err) {
@@ -299,21 +380,83 @@ router.post('/assignments/:id/progress', async (req, res, next) => {
   }
 });
 
+// Starts (or resumes) a quiz attempt once the lessons are done. A fresh attempt
+// draws questions that avoid the previous attempt's, so a retake is a new test
+// rather than a replay.
+router.post('/assignments/:id/quiz', async (req, res, next) => {
+  try {
+    const assignment = await loadOwnAssignment(req, res);
+    if (!assignment) return undefined;
+    if (assignment.status === 'completed') {
+      return res.status(400).json({ message: 'Module already completed' });
+    }
+
+    if (assignment.lessonProgress < (assignment.lessons || []).length) {
+      return res.status(409).json({ message: 'Finish the lessons first' });
+    }
+
+    const quiz = assignment.quiz || [];
+    if (quiz.length === 0) return res.json({ questions: [] });
+    if (servedIsValid(assignment.quizServed, quiz)) {
+      return res.json({ questions: presentQuiz(assignment.quizServed, quiz) });
+    }
+
+    const { rows: last } = await db.query(
+      `SELECT questions FROM training_quiz_attempts
+       WHERE assignment_id = $1 ORDER BY id DESC LIMIT 1`,
+      [assignment.id],
+    );
+    const served = drawQuiz(quiz, last[0]?.questions || []);
+    await db.query(
+      `UPDATE training_assignments SET quiz_served = $1,
+         status = CASE WHEN status = 'assigned' THEN 'in_progress' ELSE status END
+       WHERE id = $2`,
+      [json(served), assignment.id],
+    );
+    return res.json({ questions: presentQuiz(served, quiz) });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// Grades the attempt in progress: lesson misses and quiz answers together. Every
+// attempt is logged with its misses. A fail marks the assignment 'failed' and
+// sends the employee back through the lessons, with misses counted afresh.
 router.post('/assignments/:id/complete', async (req, res, next) => {
   const { answers } = req.body;
 
   try {
     const assignment = await loadOwnAssignment(req, res);
     if (!assignment) return undefined;
+    if (assignment.status === 'completed') {
+      return res.status(400).json({ message: 'Module already completed' });
+    }
 
     const quiz = assignment.quiz || [];
-    const review = quiz.map((question, i) => ({
-      correctIndex: question.correctIndex,
-      chosen: Array.isArray(answers) ? answers[i] : undefined,
-      correct: Array.isArray(answers) && answers[i] === question.correctIndex,
-    }));
+    const served = quiz.length > 0 ? assignment.quizServed : [];
+    if (quiz.length > 0 && !servedIsValid(served, quiz)) {
+      return res.status(409).json({ message: 'Start the quiz first' });
+    }
+
+    const review = served.map(({ q, order }, i) => {
+      const chosen = Array.isArray(answers) ? answers[i] : undefined;
+      return {
+        question: quiz[q].question,
+        options: order.map((o) => quiz[q].options[o]),
+        chosen,
+        correctIndex: order.indexOf(quiz[q].correctIndex),
+        correct: Number.isInteger(chosen) && order[chosen] === quiz[q].correctIndex,
+      };
+    });
     const correct = review.filter((r) => r.correct).length;
-    const score = quiz.length > 0 ? correct / quiz.length : 1;
+    const items = lessonItems(assignment.lessons);
+    const misses = assignment.lessonMisses || 0;
+    const { score, lessonScore, quizScore } = trainingScore({
+      quizCorrect: correct,
+      quizTotal: review.length,
+      items,
+      misses,
+    });
     const passed = score >= PASS_THRESHOLD;
     // Reveal correct answers only once passed, so a retake still tests knowledge.
     if (!passed) review.forEach((r) => delete r.correctIndex);
@@ -321,19 +464,43 @@ router.post('/assignments/:id/complete', async (req, res, next) => {
     // Two separate query strings (not a CASE keyed off the same $1) — Postgres's
     // parameter type inference chokes on reusing $1 as both an assigned value
     // and a comparison operand in one statement ("inconsistent types deduced").
-    const status = passed ? 'completed' : 'in_progress';
+    const status = passed ? 'completed' : 'failed';
     const updateQuery = passed
-      ? `UPDATE training_assignments SET status = $1, completed_at = now(),
-           quiz_attempts = quiz_attempts + 1, last_score = $3, last_attempt_at = now()
+      ? `UPDATE training_assignments SET status = $1, completed_at = now(), quiz_served = NULL,
+           lesson_misses = 0, quiz_attempts = quiz_attempts + 1, last_score = $3, last_attempt_at = now()
          WHERE id = $2
          RETURNING id, status, completed_at AS "completedAt"`
-      : `UPDATE training_assignments SET status = $1,
-           quiz_attempts = quiz_attempts + 1, last_score = $3, last_attempt_at = now()
+      : `UPDATE training_assignments SET status = $1, quiz_served = NULL,
+           lesson_misses = 0, lesson_progress = 0, quiz_attempts = quiz_attempts + 1, last_score = $3, last_attempt_at = now()
          WHERE id = $2
          RETURNING id, status, completed_at AS "completedAt"`;
     const { rows: updated } = await db.query(updateQuery, [status, assignment.id, score]);
+    await db.query(
+      `INSERT INTO training_quiz_attempts
+         (assignment_id, questions, answers, wrong, score, passed, lesson_items, lesson_misses)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [
+        assignment.id,
+        served.map(({ q }) => q),
+        json(Array.isArray(answers) ? answers : null),
+        review.length - correct,
+        score,
+        passed,
+        items,
+        misses,
+      ],
+    );
 
-    return res.json({ ...updated[0], score, passed, review });
+    return res.json({
+      ...updated[0],
+      score,
+      passed,
+      quizScore,
+      lessonScore,
+      lessonItems: items,
+      lessonMisses: misses,
+      review,
+    });
   } catch (err) {
     return next(err);
   }

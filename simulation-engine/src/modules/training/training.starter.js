@@ -89,6 +89,9 @@ module.exports = [
         options: ['Send it back', 'Check your balance via *334#', 'Share your PIN to verify'],
         correctIndex: 1,
       },
+      { question: 'Who is allowed to ask for your M-Pesa PIN?', options: ['A Safaricom agent on the phone', 'Nobody, ever', 'Customer care by SMS'], correctIndex: 1 },
+      { question: 'An "M-Pesa" SMS comes from 0712 345 678. This means:', options: ['It is likely fake', 'It is a new official number', 'It is from your bank'], correctIndex: 0 },
+      { question: 'A message says your line will be blocked unless you click a link. You:', options: ['Click quickly to keep the line', 'Forward it to 333 and ignore the link', 'Reply STOP'], correctIndex: 1 },
     ],
   },
   {
@@ -170,6 +173,9 @@ module.exports = [
         options: ['A logo', 'A 48-hour penalty threat with a login link', 'A footer address'],
         correctIndex: 1,
       },
+      { question: 'A "KRA refund" email asks for your bank card details. You:', options: ['Send them to get the refund', 'Ignore the link and check iTax directly', 'Reply with half the card number'], correctIndex: 1 },
+      { question: 'Where do you confirm a KRA penalty is real?', options: ['By logging in to itax.kra.go.ke yourself', 'By calling the number in the email', 'By opening the attachment'], correctIndex: 0 },
+      { question: 'A KRA email attachment is named "Notice.pdf.exe". It is:', options: ['A normal PDF', 'Malware disguised as a document', 'An encrypted KRA file'], correctIndex: 1 },
     ],
   },
   {
@@ -229,6 +235,10 @@ module.exports = [
         options: ['Report it to IT', 'Keep quiet', 'Forward it'],
         correctIndex: 0,
       },
+      { question: 'An email from safaricom-care.net asks you to verify your account. It is:', options: ['Official', 'Suspicious, the domain is not safaricom.co.ke', 'Fine if it has the logo'], correctIndex: 1 },
+      { question: 'You typed your password on a fake Safaricom page. First step?', options: ['Change the password and tell IT', 'Wait and see', 'Delete the email'], correctIndex: 0 },
+      { question: 'A caller says they are Safaricom and need the code just sent to you. You:', options: ['Read it out', 'Hang up, the code is only for you', 'Send it by SMS instead'], correctIndex: 1 },
+      { question: 'What does a real Safaricom message never do?', options: ['Mention your number', 'Ask for your PIN or password', 'Give a customer care line'], correctIndex: 1 },
     ],
   },
   {
@@ -288,6 +298,10 @@ module.exports = [
         options: ['accounts@supplier.co.ke', 'accounts@supp1ier-ke.com', 'Both look fine'],
         correctIndex: 1,
       },
+      { question: 'An invoice is marked "pay today or lose the discount". This is:', options: ['Normal pressure', 'A pressure tactic worth checking', 'Proof it is genuine'], correctIndex: 1 },
+      { question: 'Before paying a first invoice from a new supplier, you should:', options: ['Pay it to build trust', 'Confirm the supplier and order through procurement', 'Ask the sender if it is real'], correctIndex: 1 },
+      { question: 'A known supplier\'s email asks you to "keep this change confidential". You:', options: ['Report it and verify by phone', 'Keep it quiet as asked', 'Forward it to all of finance'], correctIndex: 0 },
+      { question: 'Which invoice detail is most worth double-checking?', options: ['The company logo', 'The bank account number', 'The font'], correctIndex: 1 },
     ],
   },
   {
@@ -339,6 +353,10 @@ module.exports = [
     quiz: [
       { question: 'How should you reach your bank after a scary alert?', options: ['Click the link in the message', 'Use the official app or the number on your card', 'Reply to the SMS'], correctIndex: 1 },
       { question: 'Which detail proves a bank message is fake?', options: ['It greets you by name', 'It asks for your PIN or OTP', 'It shows the bank logo'], correctIndex: 1 },
+      { question: 'A caller from "the fraud team" asks for the OTP just sent to you. You:', options: ['Hang up and call the bank yourself', 'Read it out to stop the fraud', 'Text it to them'], correctIndex: 0 },
+      { question: 'An SMS says your card is blocked and gives a number to call. You:', options: ['Call that number', 'Call the number on the back of your card', 'Reply with your card number'], correctIndex: 1 },
+      { question: 'A bank email link goes to secure-equitybank-login.com. It is:', options: ['The bank\'s secure site', 'A lookalike site', 'Safe because it says secure'], correctIndex: 1 },
+      { question: 'You shared your banking PIN by mistake. What first?', options: ['Wait for a debit', 'Call the bank to block the card and change the PIN', 'Delete the message'], correctIndex: 1 },
     ],
   },
   {
@@ -390,6 +408,10 @@ module.exports = [
     quiz: [
       { question: 'A password-expiry email links to an outside site. You:', options: ['Enter your password to keep it', 'Go to the official portal yourself or ask IT', 'Ignore all IT emails forever'], correctIndex: 1 },
       { question: 'What is a strong sign an IT email is fake?', options: ['It is on your company domain', 'It threatens instant lockout and links offsite', 'It has no attachment'], correctIndex: 1 },
+      { question: 'Someone from "IT" calls and asks for your password to fix your mailbox. You:', options: ['Give it, they are IT', 'Refuse, IT never needs your password', 'Email it to them instead'], correctIndex: 1 },
+      { question: 'A pop-up says your PC is infected and to call a number. You:', options: ['Call the number', 'Close it and tell IT', 'Install the tool it offers'], correctIndex: 1 },
+      { question: 'An "IT" email asks you to approve an MFA prompt you did not start. You:', options: ['Deny it and report to IT', 'Approve to stop the prompts', 'Approve once only'], correctIndex: 0 },
+      { question: 'Where do you check if an IT notice is real?', options: ['Reply to the sender', 'The official IT help desk or intranet', 'The link in the notice'], correctIndex: 1 },
     ],
   },
   {
@@ -440,6 +462,10 @@ module.exports = [
     quiz: [
       { question: 'How are payroll bank-detail changes handled safely?', options: ['Via a link in an email', 'Through the official HR system or in person', 'By replying with your details'], correctIndex: 1 },
       { question: 'What makes a payroll email suspicious?', options: ['It mentions payroll', 'It pressures you with a deadline and links offsite', 'It is signed by HR'], correctIndex: 1 },
+      { question: 'An email offers a "salary increment letter" behind a login link. You:', options: ['Log in to read it', 'Check with HR directly', 'Forward it to colleagues'], correctIndex: 1 },
+      { question: 'HR emails asking for your ID and KRA PIN in a reply. You:', options: ['Reply with them', 'Confirm with HR in person or on a known line', 'Send just the ID'], correctIndex: 1 },
+      { question: 'A payslip attachment asks you to "enable macros" to view it. It is:', options: ['Likely malware', 'Normal for payslips', 'Safe if from HR'], correctIndex: 0 },
+      { question: 'Who should you tell about a suspicious HR email?', options: ['Nobody', 'IT or security, using the report button', 'Only the sender'], correctIndex: 1 },
     ],
   },
   {
@@ -490,6 +516,10 @@ module.exports = [
     quiz: [
       { question: 'A parcel SMS asks for a small release fee. You:', options: ['Pay it immediately', 'Verify on the official courier site', 'Send your card number'], correctIndex: 1 },
       { question: 'What is a tell-tale sign of a parcel scam?', options: ['It names the courier and your order', 'It is vague and asks for a fee via a link', 'It arrives on a weekday'], correctIndex: 1 },
+      { question: 'You get a delivery SMS but ordered nothing. You:', options: ['Ignore the link and delete it', 'Click to see what it is', 'Pay to find out'], correctIndex: 0 },
+      { question: 'How do you check a real parcel?', options: ['With the tracking number on the courier\'s own site', 'Through the SMS link', 'By replying to the SMS'], correctIndex: 0 },
+      { question: 'A courier site asks for your full card details for KES 150. It is:', options: ['A normal fee', 'A card-harvesting trick', 'A customs charge'], correctIndex: 1 },
+      { question: 'A delivery link ends in .apk and asks you to install it. You:', options: ['Install it to track', 'Do not install, it could be malware', 'Install then delete'], correctIndex: 1 },
     ],
   },
   {
@@ -540,6 +570,10 @@ module.exports = [
     quiz: [
       { question: 'An urgent do-not-call request from the boss should make you:', options: ['Act fast to impress them', 'Verify on a known number first', 'Reply to confirm'], correctIndex: 1 },
       { question: 'A hallmark of CEO fraud is:', options: ['A detailed, routine request', 'Secrecy, urgency and a senior name', 'A request sent to the whole team'], correctIndex: 1 },
+      { question: 'The "MD" emails from a Gmail address asking for gift cards. You:', options: ['Buy them quickly', 'Verify with the MD on a known number', 'Reply asking which cards'], correctIndex: 1 },
+      { question: 'A director asks you to skip the approval process "just this once". You:', options: ['Follow the normal approval process', 'Skip it, they are senior', 'Ask a colleague to pay instead'], correctIndex: 0 },
+      { question: 'The display name says "CEO" but the address is ceo.office@outlook.com. It is:', options: ['The CEO\'s backup email', 'A likely impersonation', 'Fine for urgent matters'], correctIndex: 1 },
+      { question: 'Why do CEO fraud emails say "I\'m in a meeting, can\'t talk"?', options: ['To stop you verifying by phone', 'Because CEOs are busy', 'To be polite'], correctIndex: 0 },
     ],
   },
   {
@@ -590,6 +624,10 @@ module.exports = [
     quiz: [
       { question: 'A dividend SMS asks you to update payout details. You:', options: ['Update via the link', 'Confirm with the SACCO office or app', 'Reply with your ID number'], correctIndex: 1 },
       { question: 'Why do dividend and loan scams work?', options: ['They use good news to lower your guard', 'They are always poorly written', 'They never mention money'], correctIndex: 0 },
+      { question: 'A "SACCO officer" asks for a processing fee to release your loan. You:', options: ['Pay to speed it up', 'Check with the SACCO office first', 'Send half now'], correctIndex: 1 },
+      { question: 'Your SACCO login link arrives by WhatsApp from an unknown number. You:', options: ['Use the official app or website instead', 'Log in through it', 'Forward it to members'], correctIndex: 0 },
+      { question: 'An SMS asks you to send your member number and ID to claim a bonus. It is:', options: ['A routine update', 'A likely identity scam', 'Required by law'], correctIndex: 1 },
+      { question: 'Who should you tell about a fake SACCO message?', options: ['The SACCO through its official contacts', 'Nobody', 'The sender'], correctIndex: 0 },
     ],
   },
 ];

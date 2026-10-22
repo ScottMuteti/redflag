@@ -60,7 +60,7 @@ function MyTrainingPage() {
                 <StatusBadge status={a.status} />
               </div>
               <p className="mt-2 text-xs text-ink-3">
-                {a.lessons?.length || 0} lessons · {a.quiz?.length || 0} quiz questions
+                {a.lessons?.length || 0} lessons · {a.quizLength || 0} quiz questions
                 {a.estimatedMinutes ? ` · ~${a.estimatedMinutes} min` : ''}
               </p>
               <MiniBar value={progressOf(a)} label={`${a.title} progress`} className="mt-4" />
@@ -68,9 +68,11 @@ function MyTrainingPage() {
                 <span>
                   {a.status === 'completed'
                     ? `Completed ${formatDate(a.completedAt)}${a.lastScore !== null ? ` · ${formatPercent(Number(a.lastScore))}` : ''}`
-                    : a.dueAt
-                      ? `Due ${formatDate(a.dueAt)}`
-                      : `Assigned ${formatDate(a.assignedAt)}`}
+                    : a.status === 'failed'
+                      ? `Quiz failed ${a.quizAttempts}×${a.lastScore !== null ? ` · last ${formatPercent(Number(a.lastScore))}` : ''}`
+                      : a.dueAt
+                        ? `Due ${formatDate(a.dueAt)}`
+                        : `Assigned ${formatDate(a.assignedAt)}`}
                 </span>
                 <Button
                   as={Link}
@@ -83,7 +85,9 @@ function MyTrainingPage() {
                     ? 'Review'
                     : a.status === 'assigned'
                       ? 'Start'
-                      : 'Continue'}
+                      : a.status === 'failed'
+                        ? 'Retake'
+                        : 'Continue'}
                 </Button>
               </div>
             </Card>
