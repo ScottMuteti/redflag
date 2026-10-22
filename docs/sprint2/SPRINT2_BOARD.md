@@ -24,10 +24,10 @@ Status key: ✅ done · 🟡 in progress · ⛔ blocked · ⬜ not started.
 | S2-11 | ML pipeline: data gen, train, evaluate, run folder | O3 | ✅ | `risk-model/ml/`, `ml/runs/20261021074019_2eaeab35/` |
 | S2-12 | Scoring integration (events → features → stored score) | O3 | ✅ | `scoring.service.js`, `scoringClient.js`; live score 0.59 after click |
 | S2-13 | Cold-start low-data flag | O3 | ✅ | `ml/predict.py`; `tests/test_predict.py` |
-| S2-14 | Adaptive training by failed vector + server-graded quiz | O4 | ✅ | `training.routes.js`; TEST_LOG T-12..T-14 |
+| S2-14 | Adaptive training by failed vector + server-graded quiz | O4 | ✅ | `training.routes.js`; TEST_LOG T-12..T-14, T-35..T-38 |
 | S2-15 | Analytics dashboard (org/dept/campaign/training) | O1,O2 | ✅ | `AnalyticsPage.jsx` — honest empty state per panel (trend/range/funnel/departments); null org score shows — |
 | S2-16 | Score display: value/100, date, version, low-data badge | O2 | ✅ | `EmployeesPage.jsx` detail: /100, computed date, model version, low-data badge, "no score yet" state |
-| S2-17 | Security/failure test sweep | all | ✅ | 64 Jest + 9 pytest: cross-org, tokens, rate limit, injection (T-30), replay, double-launch, scoring/Gophish down, public-surface isolation (T-31) |
+| S2-17 | Security/failure test sweep | all | ✅ | 70 Jest + 9 pytest: cross-org, tokens, rate limit, injection (T-30), replay, double-launch, scoring/Gophish down, public-surface isolation (T-31) |
 | S2-18 | Docs: board, test log, traceability, ch5, decisions, demo | all | ✅ | `docs/sprint2`, `TRACEABILITY.md`, `chapter5`, `decisions/001-003` |
 | S2-19 | Deployment requirements write-up | — | ✅ | `DEPLOYMENT_REQUIREMENTS.md` |
 
@@ -37,4 +37,4 @@ Status key: ✅ done · 🟡 in progress · ⛔ blocked · ⬜ not started.
 - Test DB for integration tests is not yet wired into CI (unit tests mock the DB) — cut to Sprint III.
 
 ## Cut to Sprint III
-Playwright E2E, full accessibility sweep, normalised `quiz_results` table, Makefile, actual deployment, retrain on real pilot data (issue #6).
+Playwright E2E, full accessibility sweep, Makefile, actual deployment, retrain on real pilot data (issue #6).

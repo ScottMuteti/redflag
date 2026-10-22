@@ -49,7 +49,8 @@ Shows input → processing → output through every layer. Data really flows; no
    auto-assigned for that vector.
 7. **Employee view (O4).** Log in as the clicked employee. Show the assigned
    module, take the quiz (server-graded, 80% to pass), show completion. Note the
-   quiz never ships the answer key.
+   quiz never ships the answer key. Lesson misses count toward the score; a fail
+   is logged, sends you back through the lessons, and the retake uses new questions.
 8. **Admin analytics (O1, O2).** Org risk score, department comparison, campaign
    click/report rates, training completion. Point out honest empty states where
    there's no data yet.
