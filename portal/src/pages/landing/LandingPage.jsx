@@ -237,11 +237,7 @@ function Hero({ user }) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
         >
-          <span className="inline-flex items-center gap-2 rounded-full bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-800">
-            <span className="size-1.5 rounded-full bg-brand-700" aria-hidden="true" />
-            {HERO.badge}
-          </span>
-          <h1 className="mt-5 text-[44px] leading-[1.02] font-extrabold tracking-tight text-ink sm:text-[56px]">
+          <h1 className="text-[44px] leading-[1.02] font-extrabold tracking-tight text-ink sm:text-[56px]">
             {HEADLINE.lead} <span className="text-brand-700">{HEADLINE.accent}</span>
           </h1>
           <p className="mt-5 max-w-xl text-lg leading-relaxed text-ink-2">{HERO.subheading}</p>

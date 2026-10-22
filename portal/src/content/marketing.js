@@ -12,7 +12,6 @@ export const AUTH_BENEFITS = [
 ];
 
 export const HERO = {
-  badge: 'Built for Kenyan organisations',
   subheading:
     'Simulate realistic M-Pesa, KRA and Safaricom scams over email and SMS, measure who’s vulnerable, and train them automatically.',
   reassurance: ['Kenya-specific templates', 'Email + SMS simulations', 'Adaptive training'],
