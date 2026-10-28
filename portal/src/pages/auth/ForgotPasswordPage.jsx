@@ -1,26 +1,37 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, KeyRound, MailCheck } from 'lucide-react';
+import { AlertCircle, ArrowLeft, KeyRound, MailCheck } from 'lucide-react';
+import { requestPasswordReset } from '../../api/auth';
 import { Button, FormField, Input } from '../../components/ui';
 import AuthLayout from './AuthLayout';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// There is no self-service reset endpoint yet: employee passwords are reset by their admin
-// (PUT /employees/:id/password). TODO: wire to a reset-email endpoint when the API adds one.
+// Emails a reset link. The answer is the same whether or not the account exists.
 function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
+  const [formError, setFormError] = useState('');
   const [sent, setSent] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     if (!EMAIL_RE.test(email)) {
       setError('Enter a valid email address');
       return;
     }
     setError('');
-    setSent(true);
+    setFormError('');
+    setSubmitting(true);
+    try {
+      await requestPasswordReset(email);
+      setSent(true);
+    } catch (err) {
+      setFormError(err.response?.data?.message || 'Could not send a reset link');
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -34,13 +45,13 @@ function ForgotPasswordPage() {
       </span>
       {sent ? (
         <>
-          <h1 className="mt-4 text-[26px] font-bold tracking-tight text-ink">Ask your admin</h1>
+          <h1 className="mt-4 text-[26px] font-bold tracking-tight text-ink">Check your email</h1>
           <p className="mt-2 text-body text-ink-2">
-            Passwords for <strong className="text-ink">{email}</strong> are managed by your
-            organisation admin. They can set a new one for you from the Employees page in seconds.
+            If <strong className="text-ink">{email}</strong> has a RedFlag account, we’ve sent a
+            link to reset the password. It expires in 30 minutes.
           </p>
           <p className="mt-3 text-body text-ink-2">
-            If you’re the admin and you’re locked out, contact RedFlag support.
+            No email? Check spam, or ask your organisation admin to reset it for you.
           </p>
         </>
       ) : (
@@ -49,7 +60,7 @@ function ForgotPasswordPage() {
             Forgot your password?
           </h1>
           <p className="mt-1 text-body text-ink-2">
-            Enter your email and we’ll tell you how to get back in.
+            Enter your email and we’ll send you a reset link.
           </p>
           <form onSubmit={handleSubmit} noValidate className="mt-6 grid gap-4">
             <FormField label="Email" error={error}>
@@ -60,8 +71,17 @@ function ForgotPasswordPage() {
                 onChange={(e) => setEmail(e.target.value)}
               />
             </FormField>
-            <Button type="submit" variant="primary" size="lg" className="w-full">
-              Continue
+            {formError && (
+              <p
+                role="alert"
+                className="flex items-center gap-2 rounded-control bg-danger-bg px-3 py-2.5 text-body text-danger"
+              >
+                <AlertCircle size={16} aria-hidden="true" />
+                {formError}
+              </p>
+            )}
+            <Button type="submit" variant="primary" size="lg" loading={submitting} className="w-full">
+              Send reset link
             </Button>
           </form>
         </>

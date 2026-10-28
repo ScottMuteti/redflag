@@ -12,14 +12,14 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./simulation-engine/src/db/schema.sql:/docker-entrypoint-initdb.d/schema.sql
 
   simulation-engine:
     build: ./simulation-engine
     restart: unless-stopped
     env_file: .env
     ports:
-      - "4000:4000"
+      - "4000:4000" # admin API — keep private; do NOT tunnel this
+      - "4001:4001" # public surface (click tracking only) — the tunnel targets this
     depends_on:
       - postgres
     volumes:
@@ -39,11 +39,17 @@ services:
   gophish:
     image: gophish/gophish:latest
     restart: unless-stopped
+    # Run as root so Gophish can create its DB in the (root-owned) named volume
+    # on a fresh clone without a manual chown. Local demo only.
+    user: root
     ports:
       - "33330:3333" # host port shifted — 3333 falls in Windows' reserved dynamic port range
       - "8080:8080"
     volumes:
       - ./docker/gophish/config.json:/opt/gophish/config.json
+      # Persist gophish.db so the admin password, API key and campaigns survive
+      # container recreates (config.json points db_path at data/).
+      - gophish_data:/opt/gophish/data
 
   portal:
     build: ./portal
@@ -55,3 +61,4 @@ services:
 
 volumes:
   postgres_data:
+  gophish_data:

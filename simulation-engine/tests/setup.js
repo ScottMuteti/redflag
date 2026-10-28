@@ -9,3 +9,4 @@ process.env.PUBLIC_BACKEND_URL = 'http://localhost:4000';
 // (app.js -> campaigns.routes -> smsClient), so tests need a placeholder.
 process.env.AT_API_KEY = 'test-at-api-key';
 process.env.AT_USERNAME = 'sandbox';
+process.env.GOOGLE_CLIENT_ID = 'test-google-client-id';

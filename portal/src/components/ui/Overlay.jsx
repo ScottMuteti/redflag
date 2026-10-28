@@ -156,8 +156,10 @@ export function ConfirmDialog({
   confirmLabel = 'Confirm',
   tone = 'danger',
   loading,
+  confirmDisabled,
   onConfirm,
   onCancel,
+  children,
 }) {
   return (
     <Modal
@@ -173,6 +175,7 @@ export function ConfirmDialog({
           <Button
             variant={tone === 'danger' ? 'danger' : 'primary'}
             loading={loading}
+            disabled={confirmDisabled}
             onClick={onConfirm}
           >
             {confirmLabel}
@@ -188,6 +191,7 @@ export function ConfirmDialog({
         )}
         <p className="text-body text-ink-2">{message}</p>
       </div>
+      {children && <div className="mt-4">{children}</div>}
     </Modal>
   );
 }

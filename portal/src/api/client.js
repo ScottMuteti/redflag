@@ -20,7 +20,7 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 401 && !isAuthCall) {
       localStorage.removeItem('redflag_token');
       localStorage.removeItem('redflag_user');
-      window.location.assign('/login');
+      window.location.assign('/login?expired=1');
     }
     return Promise.reject(error);
   },

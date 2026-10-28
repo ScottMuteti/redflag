@@ -6,6 +6,7 @@ const env = require('../../config/env');
 const gophishClient = require('../../integrations/gophish/gophishClient');
 const smsClient = require('../../integrations/africasTalking/smsClient');
 const { maybeAssignTraining } = require('../training/training.routes');
+const { rescoreAfterEvent } = require('../scoring/scoring.service');
 
 const router = express.Router();
 const requireAdmin = [authenticate, authorize('admin')];
@@ -13,15 +14,34 @@ const requireAdmin = [authenticate, authorize('admin')];
 const CAMPAIGN_COLUMNS = `
   id, name, type, template_key AS "templateKey", difficulty_level AS "difficultyLevel",
   status, gophish_campaign_id AS "gophishCampaignId", scheduled_at AS "scheduledAt",
+  department_id AS "departmentId", launched_at AS "launchedAt", completed_at AS "completedAt",
+  authorised_at AS "authorisedAt", failure_reason AS "failureReason",
+  template_pool AS "templatePool", send_window_minutes AS "sendWindowMinutes",
   created_at AS "createdAt"
 `;
 
+const TEMPLATE_COLUMNS = `
+  id, type, key, name, subject, body, category, difficulty_level AS "difficultyLevel",
+  organization_id IS NOT NULL AS "isCustom"
+`;
+
+const DIFFICULTIES = ['easy', 'medium', 'hard'];
+
+// Gophish event -> attempt timestamp. The event's `details` (which can hold
+// whatever was typed into the landing page) is deliberately never read or stored.
 const EVENT_COLUMN = {
   'Email Sent': 'sent_at',
   'Email Opened': 'opened_at',
   'Clicked Link': 'clicked_at',
   'Submitted Data': 'submitted_credentials_at',
+  'Email Reported': 'reported_at',
 };
+const FAILURE_COLUMNS = ['clicked_at', 'submitted_credentials_at'];
+const RESCORE_COLUMNS = [...FAILURE_COLUMNS, 'reported_at'];
+const LAUNCHABLE = ['draft', 'scheduled', 'failed'];
+const MAX_SEND_WINDOW = 24 * 60; // minutes
+const AUTH_REQUIRED_MESSAGE =
+  'Confirm that every recipient is an enrolled employee you are authorised to test (acknowledgeAuthorisation: true)';
 
 async function getTargetEmployees(organizationId, departmentId) {
   const params = [organizationId];
@@ -52,6 +72,44 @@ async function getCampaignOrgAndCategory(campaignId) {
   return rows[0];
 }
 
+// Writes one tracked event. Each timestamp is set once, the first time it's
+// seen, so replayed or out-of-order deliveries change nothing. A first click or
+// submission assigns training in the same transaction; rescoring runs after
+// commit so a down scoring service can't lose the event.
+async function recordEvent({ campaignId, employeeId, column, at }) {
+  const campaignInfo = await getCampaignOrgAndCategory(campaignId);
+  const client = await db.getClient();
+  let firstTime;
+  try {
+    await client.query('BEGIN');
+    const { rowCount } = await client.query(
+      `UPDATE simulation_attempts SET ${column} = $3
+       WHERE campaign_id = $1 AND employee_id = $2 AND ${column} IS NULL`,
+      [campaignId, employeeId, at],
+    );
+    firstTime = rowCount === 1;
+    if (firstTime && FAILURE_COLUMNS.includes(column) && campaignInfo) {
+      await maybeAssignTraining(
+        campaignInfo.organizationId,
+        employeeId,
+        campaignInfo.category,
+        client,
+      );
+    }
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+
+  if (firstTime && RESCORE_COLUMNS.includes(column) && campaignInfo) {
+    await rescoreAfterEvent(employeeId, campaignInfo.organizationId, campaignId);
+  }
+  return firstTime;
+}
+
 function verifyGophishSignature(req) {
   const signatureHeader = req.headers['x-gophish-signature'];
   if (!signatureHeader || !env.gophish.webhookSecret) return false;
@@ -70,8 +128,11 @@ router.get('/templates', ...requireAdmin, async (req, res, next) => {
   try {
     // An org's customised copy of a template overrides the global default with the same key.
     const { rows } = await db.query(
-      `SELECT DISTINCT ON (key) id, type, key, name, subject, body, category,
-         organization_id IS NOT NULL AS "isCustom"
+      `SELECT DISTINCT ON (key) ${TEMPLATE_COLUMNS},
+         EXISTS (
+           SELECT 1 FROM campaign_templates d
+           WHERE d.key = campaign_templates.key AND d.organization_id IS NULL
+         ) AS "hasDefault"
        FROM campaign_templates
        WHERE organization_id IS NULL OR organization_id = $1
        ORDER BY key, organization_id NULLS LAST`,
@@ -87,17 +148,24 @@ router.get('/templates', ...requireAdmin, async (req, res, next) => {
 
 // Saves an org-level copy of a template; the global default stays untouched.
 router.put('/templates/:key', ...requireAdmin, async (req, res, next) => {
-  const { subject, body } = req.body;
+  const { subject, body, difficultyLevel } = req.body;
   if (!body) return res.status(400).json({ message: 'body is required' });
+  if (difficultyLevel && !DIFFICULTIES.includes(difficultyLevel)) {
+    return res.status(400).json({ message: 'difficultyLevel must be easy, medium or hard' });
+  }
 
   try {
     const { rows } = await db.query(
-      `INSERT INTO campaign_templates (organization_id, type, key, name, subject, body, category)
-       SELECT $1, type, key, name, $3, $4, category
-       FROM campaign_templates WHERE key = $2 AND organization_id IS NULL
-       ON CONFLICT (organization_id, key) DO UPDATE SET subject = EXCLUDED.subject, body = EXCLUDED.body
-       RETURNING id, type, key, name, subject, body, category, true AS "isCustom"`,
-      [req.user.organizationId, req.params.key, subject || null, body],
+      `INSERT INTO campaign_templates
+         (organization_id, type, key, name, subject, body, category, difficulty_level)
+       SELECT $1, type, key, name, $3, $4, category, COALESCE($5, difficulty_level)
+       FROM campaign_templates
+       WHERE key = $2 AND (organization_id IS NULL OR organization_id = $1)
+       ORDER BY organization_id NULLS LAST LIMIT 1
+       ON CONFLICT (organization_id, key) DO UPDATE SET subject = EXCLUDED.subject,
+         body = EXCLUDED.body, difficulty_level = EXCLUDED.difficulty_level
+       RETURNING ${TEMPLATE_COLUMNS}`,
+      [req.user.organizationId, req.params.key, subject || null, body, difficultyLevel || null],
     );
     if (rows.length === 0) return res.status(404).json({ message: 'Template not found' });
     return res.json(rows[0]);
@@ -106,25 +174,78 @@ router.put('/templates/:key', ...requireAdmin, async (req, res, next) => {
   }
 });
 
-// Public: SMS click-tracking link embedded in smishing messages.
-router.get('/track/:token', async (req, res, next) => {
+// New org-only template.
+router.post('/templates', ...requireAdmin, async (req, res, next) => {
+  const { type, name, subject, body, category, difficultyLevel } = req.body;
+  if (!type || !name || !body) {
+    return res.status(400).json({ message: 'type, name and body are required' });
+  }
+  if (!['email', 'sms'].includes(type)) {
+    return res.status(400).json({ message: 'type must be email or sms' });
+  }
+  if (type === 'email' && !subject) {
+    return res.status(400).json({ message: 'subject is required for email templates' });
+  }
+  if (difficultyLevel && !DIFFICULTIES.includes(difficultyLevel)) {
+    return res.status(400).json({ message: 'difficultyLevel must be easy, medium or hard' });
+  }
+  const slug = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 60);
+  const key = `${slug || 'template'}-${crypto.randomBytes(3).toString('hex')}`;
+
   try {
     const { rows } = await db.query(
-      `UPDATE simulation_attempts SET clicked_at = COALESCE(clicked_at, now())
-       WHERE tracking_token = $1
-       RETURNING campaign_id AS "campaignId", employee_id AS "employeeId"`,
+      `INSERT INTO campaign_templates
+         (organization_id, type, key, name, subject, body, category, difficulty_level)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING ${TEMPLATE_COLUMNS}`,
+      [
+        req.user.organizationId,
+        type,
+        key,
+        name,
+        type === 'email' ? subject : null,
+        body,
+        category || null,
+        difficultyLevel || 'medium',
+      ],
+    );
+    return res.status(201).json(rows[0]);
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// Removes the org's copy: a customised default reverts, an org-only template is deleted.
+router.delete('/templates/:key', ...requireAdmin, async (req, res, next) => {
+  try {
+    const { rowCount } = await db.query(
+      'DELETE FROM campaign_templates WHERE key = $1 AND organization_id = $2',
+      [req.params.key, req.user.organizationId],
+    );
+    if (rowCount === 0) return res.status(404).json({ message: 'No custom template to remove' });
+    return res.status(204).send();
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// Public: SMS click-tracking link embedded in smishing messages.
+// Exported so the internet-facing publicApp can mount it in isolation, without
+// pulling in any admin route (see src/publicApp.js).
+async function trackClick(req, res, next) {
+  try {
+    const { rows } = await db.query(
+      `SELECT campaign_id AS "campaignId", employee_id AS "employeeId"
+       FROM simulation_attempts WHERE tracking_token::text = $1`,
       [req.params.token],
     );
     if (rows.length === 0) return res.status(404).send('Not found');
 
-    const campaignInfo = await getCampaignOrgAndCategory(rows[0].campaignId);
-    if (campaignInfo) {
-      await maybeAssignTraining(
-        campaignInfo.organizationId,
-        rows[0].employeeId,
-        campaignInfo.category,
-      );
-    }
+    await recordEvent({ ...rows[0], column: 'clicked_at', at: new Date() });
 
     return res.send(`<!doctype html>
 <html>
@@ -139,7 +260,8 @@ router.get('/track/:token', async (req, res, next) => {
   } catch (err) {
     return next(err);
   }
-});
+}
+router.get('/track/:token', trackClick);
 
 // Public: Gophish webhook, HMAC-verified via GOPHISH_WEBHOOK_SECRET.
 router.post('/webhook/gophish', async (req, res, next) => {
@@ -147,39 +269,45 @@ router.post('/webhook/gophish', async (req, res, next) => {
     return res.status(401).json({ message: 'Invalid signature' });
   }
 
-  try {
-    const { campaign_id: gophishCampaignId, email, message } = req.body;
-    const column = EVENT_COLUMN[message];
-    if (!column) return res.status(200).json({ message: 'Ignored event' });
+  const { campaign_id: gophishCampaignId, email, message, time } = req.body || {};
+  const column = EVENT_COLUMN[message];
+  if (!column) return res.status(200).json({ message: 'Ignored event' });
+  if (!Number.isInteger(gophishCampaignId) || typeof email !== 'string') {
+    return res.status(400).json({ message: 'campaign_id and email are required' });
+  }
+  const at = time && !Number.isNaN(Date.parse(time)) ? new Date(time) : new Date();
 
+  try {
+    // Resolve the RedFlag campaign from the Gophish id — either the campaign's
+    // own id or any of its mixed-batch sub-send ids.
     const { rows: campaignRows } = await db.query(
-      'SELECT id FROM simulation_campaigns WHERE gophish_campaign_id = $1',
+      `SELECT id, organization_id AS "organizationId"
+         FROM simulation_campaigns WHERE gophish_campaign_id = $1
+       UNION
+       SELECT sc.id, sc.organization_id
+         FROM simulation_campaigns sc
+         JOIN campaign_gophish_sends cgs ON cgs.campaign_id = sc.id
+         WHERE cgs.gophish_campaign_id = $1
+       LIMIT 1`,
       [gophishCampaignId],
     );
     if (campaignRows.length === 0) return res.status(200).json({ message: 'Unknown campaign' });
+    const campaign = campaignRows[0];
 
-    const { rows: employeeRows } = await db.query('SELECT id FROM employees WHERE email = $1', [
-      email,
-    ]);
+    // Only employees of the campaign's own organisation can be matched.
+    const { rows: employeeRows } = await db.query(
+      'SELECT id FROM employees WHERE lower(email) = lower($1) AND organization_id = $2',
+      [email, campaign.organizationId],
+    );
     if (employeeRows.length === 0) return res.status(200).json({ message: 'Unknown employee' });
 
-    await db.query(
-      `UPDATE simulation_attempts SET ${column} = now() WHERE campaign_id = $1 AND employee_id = $2`,
-      [campaignRows[0].id, employeeRows[0].id],
-    );
-
-    if (column === 'clicked_at' || column === 'submitted_credentials_at') {
-      const campaignInfo = await getCampaignOrgAndCategory(campaignRows[0].id);
-      if (campaignInfo) {
-        await maybeAssignTraining(
-          campaignInfo.organizationId,
-          employeeRows[0].id,
-          campaignInfo.category,
-        );
-      }
-    }
-
-    return res.status(200).json({ message: 'ok' });
+    const firstTime = await recordEvent({
+      campaignId: campaign.id,
+      employeeId: employeeRows[0].id,
+      column,
+      at,
+    });
+    return res.status(200).json({ message: firstTime ? 'ok' : 'Duplicate event ignored' });
   } catch (err) {
     return next(err);
   }
@@ -198,22 +326,70 @@ router.get('/', ...requireAdmin, async (req, res, next) => {
 });
 
 router.post('/', ...requireAdmin, async (req, res, next) => {
-  const { name, type, templateKey, difficultyLevel, scheduledAt } = req.body;
+  const { name, type, templateKey, difficultyLevel, scheduledAt, departmentId } = req.body;
+  const sendWindowMinutes = Number(req.body.sendWindowMinutes || 0);
+  const acknowledged = req.body.acknowledgeAuthorisation === true;
+  // Optional mixed-batch pool: extra template keys; each recipient gets one of
+  // the pool (primary templateKey included), so the send is not identical.
+  const rawPool = Array.isArray(req.body.templatePool) ? req.body.templatePool : [];
   if (!name || !type || !templateKey) {
     return res.status(400).json({ message: 'name, type and templateKey are required' });
   }
   if (!['email', 'sms'].includes(type)) {
     return res.status(400).json({ message: 'type must be email or sms' });
   }
+  if (rawPool.some((k) => typeof k !== 'string')) {
+    return res.status(400).json({ message: 'templatePool must be an array of template keys' });
+  }
   if (scheduledAt && Number.isNaN(Date.parse(scheduledAt))) {
     return res.status(400).json({ message: 'scheduledAt must be a valid date' });
   }
+  if (difficultyLevel && !DIFFICULTIES.includes(difficultyLevel)) {
+    return res.status(400).json({ message: 'difficultyLevel must be easy, medium or hard' });
+  }
+  if (!Number.isInteger(sendWindowMinutes) || sendWindowMinutes < 0 || sendWindowMinutes > MAX_SEND_WINDOW) {
+    return res.status(400).json({ message: `sendWindowMinutes must be a whole number from 0 to ${MAX_SEND_WINDOW}` });
+  }
+  // Scheduling is a deferred launch, so it needs the same authorisation.
+  if (scheduledAt && !acknowledged) {
+    return res.status(422).json({ message: AUTH_REQUIRED_MESSAGE });
+  }
 
   try {
+    if (departmentId) {
+      const { rows: deptRows } = await db.query(
+        'SELECT id FROM departments WHERE id = $1 AND organization_id = $2',
+        [departmentId, req.user.organizationId],
+      );
+      if (deptRows.length === 0) return res.status(400).json({ message: 'Unknown departmentId' });
+    }
+
+    // The full pool is the primary template plus any extra keys, de-duplicated.
+    // Every key must exist and match the campaign channel. A pool of one is just
+    // a normal single-template campaign, so we store NULL in that case.
+    const poolKeys = [...new Set([templateKey, ...rawPool])];
+    if (poolKeys.length > 1) {
+      const { rows: poolRows } = await db.query(
+        `SELECT key FROM campaign_templates
+         WHERE key = ANY($1::text[]) AND type = $2
+           AND (organization_id = $3 OR organization_id IS NULL)`,
+        [poolKeys, type, req.user.organizationId],
+      );
+      const found = new Set(poolRows.map((r) => r.key));
+      const missing = poolKeys.filter((k) => !found.has(k));
+      if (missing.length > 0) {
+        return res
+          .status(400)
+          .json({ message: `Unknown or wrong-channel template(s): ${missing.join(', ')}` });
+      }
+    }
+    const templatePool = poolKeys.length > 1 ? poolKeys : null;
+
     const { rows } = await db.query(
       `INSERT INTO simulation_campaigns
-         (organization_id, created_by, name, type, template_key, difficulty_level, status, scheduled_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         (organization_id, created_by, name, type, template_key, difficulty_level, status,
+          scheduled_at, department_id, authorised_by, authorised_at, template_pool, send_window_minutes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
        RETURNING ${CAMPAIGN_COLUMNS}`,
       [
         req.user.organizationId,
@@ -224,6 +400,11 @@ router.post('/', ...requireAdmin, async (req, res, next) => {
         difficultyLevel || 'medium',
         scheduledAt ? 'scheduled' : 'draft',
         scheduledAt || null,
+        departmentId || null,
+        acknowledged && scheduledAt ? req.user.sub : null,
+        acknowledged && scheduledAt ? new Date() : null,
+        templatePool,
+        sendWindowMinutes,
       ],
     );
     return res.status(201).json(rows[0]);
@@ -235,7 +416,10 @@ router.post('/', ...requireAdmin, async (req, res, next) => {
 router.get('/:id', ...requireAdmin, async (req, res, next) => {
   try {
     const { rows } = await db.query(
-      `SELECT ${CAMPAIGN_COLUMNS} FROM simulation_campaigns WHERE id = $1 AND organization_id = $2`,
+      `SELECT ${CAMPAIGN_COLUMNS},
+         (SELECT name FROM departments WHERE departments.id = simulation_campaigns.department_id)
+           AS "departmentName"
+       FROM simulation_campaigns WHERE id = $1 AND organization_id = $2`,
       [req.params.id, req.user.organizationId],
     );
     if (rows.length === 0) return res.status(404).json({ message: 'Campaign not found' });
@@ -253,137 +437,362 @@ class LaunchError extends Error {
   }
 }
 
+// The pool of template keys for a campaign: its explicit mixed-batch pool, or
+// just its single template. A pool of >1 means each recipient gets one of them.
+function campaignPool(campaign) {
+  return campaign.templatePool && campaign.templatePool.length > 0
+    ? campaign.templatePool
+    : [campaign.templateKey];
+}
+
+async function loadTemplates(keys, organizationId) {
+  const { rows } = await db.query(
+    `SELECT DISTINCT ON (key) key, type, subject, body FROM campaign_templates
+     WHERE key = ANY($1::text[]) AND (organization_id = $2 OR organization_id IS NULL)
+     ORDER BY key, organization_id NULLS LAST`,
+    [keys, organizationId],
+  );
+  return new Map(rows.map((t) => [t.key, t]));
+}
+
+// Deterministic per-recipient variant assignment: round-robin over the pool in a
+// seed-shuffled order, so the spread is even and the same campaign is repeatable.
+function assignVariants(employeeIds, poolKeys, seed) {
+  const order = [...poolKeys];
+  let a = (seed >>> 0) || 1;
+  const rand = () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  for (let i = order.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(rand() * (i + 1));
+    [order[i], order[j]] = [order[j], order[i]];
+  }
+  const map = new Map();
+  employeeIds.forEach((id, i) => map.set(id, order[i % order.length]));
+  return map;
+}
+
 // Shared by the launch route and the scheduler.
 async function launchCampaign(campaign, organizationId, departmentId) {
-  const { rows: templateRows } = await db.query(
-    `SELECT type, subject, body FROM campaign_templates
-     WHERE key = $1 AND (organization_id = $2 OR organization_id IS NULL)
-     ORDER BY organization_id NULLS LAST LIMIT 1`,
-    [campaign.templateKey, organizationId],
-  );
-  if (templateRows.length === 0) throw new LaunchError(400, 'Unknown templateKey');
-  const template = templateRows[0];
+  const poolKeys = campaignPool(campaign);
+  const byKey = await loadTemplates(poolKeys, organizationId);
+  const missing = poolKeys.filter((k) => !byKey.has(k));
+  if (missing.length > 0) throw new LaunchError(400, `Unknown templateKey(s): ${missing.join(', ')}`);
+  if ([...byKey.values()].some((t) => t.type !== campaign.type)) {
+    throw new LaunchError(400, 'A pooled template does not match the campaign channel');
+  }
 
   const employees = await getTargetEmployees(organizationId, departmentId);
   if (employees.length === 0) throw new LaunchError(400, 'No employees to target');
 
   if (campaign.type === 'email') {
-    const group = await gophishClient.createGroup(`redflag-${campaign.id}`, employees);
-    const gophishTemplate = await gophishClient.createTemplate(
-      `redflag-${campaign.id}`,
-      template.subject,
-      template.body,
+    const assignment = assignVariants(
+      employees.map((e) => e.id),
+      poolKeys,
+      campaign.id,
     );
-    const gophishCampaign = await gophishClient.createCampaign({
-      name: `redflag-${campaign.id}-${campaign.name}`,
-      groupName: group.name,
-      templateName: gophishTemplate.name,
-      pageName: env.gophish.landingPage,
-      url: env.gophish.phishUrl,
-    });
+    // Gophish sends one template per campaign, so a mixed email batch becomes one
+    // Gophish sub-campaign per template, each with the recipients assigned to it.
+    const groups = new Map();
+    for (const emp of employees) {
+      const key = assignment.get(emp.id);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(emp);
+    }
 
+    // Gophish spreads the emails evenly between launch and sendBy itself.
+    const sendBy =
+      campaign.sendWindowMinutes > 0 ? new Date(Date.now() + campaign.sendWindowMinutes * 60000) : null;
+    const sends = [];
+    try {
+      for (const [key, groupEmps] of groups) {
+        const tpl = byKey.get(key);
+        const ref = `redflag-${campaign.id}-${key}-${Date.now()}`;
+        const group = await gophishClient.createGroup(ref, groupEmps);
+        const gophishTemplate = await gophishClient.createTemplate(ref, tpl.subject, tpl.body);
+        const gc = await gophishClient.createCampaign({
+          name: `${ref}-${campaign.name}`,
+          groupName: group.name,
+          templateName: gophishTemplate.name,
+          pageName: env.gophish.landingPage,
+          url: env.gophish.phishUrl,
+          sendByDate: sendBy,
+        });
+        sends.push({ key, gophishCampaignId: gc.id, employees: groupEmps });
+      }
+    } catch (err) {
+      throw new LaunchError(
+        502,
+        'Gophish is not reachable or not set up',
+        err.response?.data?.message || err.message,
+      );
+    }
+
+    // Keep the first Gophish id on the campaign for back-compatibility; record
+    // every sub-send so the webhook can resolve events from any of them.
     await db.query(
-      'UPDATE simulation_campaigns SET status = $1, gophish_campaign_id = $2 WHERE id = $3',
-      ['running', gophishCampaign.id, campaign.id],
+      `UPDATE simulation_campaigns SET status = 'running', gophish_campaign_id = $1,
+         launched_at = now(), failure_reason = NULL WHERE id = $2`,
+      [sends[0].gophishCampaignId, campaign.id],
     );
+    for (const send of sends) {
+      await db.query(
+        `INSERT INTO campaign_gophish_sends (campaign_id, gophish_campaign_id, template_key)
+         VALUES ($1, $2, $3)`,
+        [campaign.id, send.gophishCampaignId, send.key],
+      );
+      await Promise.all(
+        send.employees.map((emp) =>
+          db.query(
+            `INSERT INTO simulation_attempts (campaign_id, employee_id, template_key)
+             VALUES ($1, $2, $3)
+             ON CONFLICT (campaign_id, employee_id)
+             DO UPDATE SET template_key = EXCLUDED.template_key`,
+            [campaign.id, emp.id, send.key],
+          ),
+        ),
+      );
+    }
+    const variants = groups.size;
+    const spread = sendBy ? `, spread over ${campaign.sendWindowMinutes} min` : '';
+    return `Email campaign launched (${employees.length} recipients${variants > 1 ? `, ${variants} message variants` : ''}${spread})`;
+  }
 
+  const targeted = employees.filter((emp) => emp.phoneNumber);
+  if (targeted.length === 0)
+    throw new LaunchError(400, 'No employees with a phone number to target');
+  const assignment = assignVariants(
+    targeted.map((e) => e.id),
+    poolKeys,
+    campaign.id,
+  );
+
+  // Send-time jitter: queue each message at a random moment in the window and
+  // let dispatchQueuedSms() send it, so the batch does not land all at once.
+  if (campaign.sendWindowMinutes > 0) {
+    const windowMs = campaign.sendWindowMinutes * 60000;
     await Promise.all(
-      employees.map((emp) =>
+      targeted.map((emp) =>
         db.query(
-          `INSERT INTO simulation_attempts (campaign_id, employee_id) VALUES ($1, $2)
-           ON CONFLICT (campaign_id, employee_id) DO NOTHING`,
-          [campaign.id, emp.id],
+          `INSERT INTO simulation_attempts (campaign_id, employee_id, template_key, send_after)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT (campaign_id, employee_id)
+           DO UPDATE SET template_key = EXCLUDED.template_key, send_after = EXCLUDED.send_after,
+             send_failed_at = NULL`,
+          [campaign.id, emp.id, assignment.get(emp.id), new Date(Date.now() + crypto.randomInt(0, windowMs))],
         ),
       ),
     );
-  } else {
-    const targeted = employees.filter((emp) => emp.phoneNumber);
-    if (targeted.length === 0)
-      throw new LaunchError(400, 'No employees with a phone number to target');
-
-    // sent_at is only set after smsClient.sendSms actually resolves — a failed
-    // send (e.g. AT credentials not configured) must not leave an attempt
-    // row that falsely claims the message went out.
-    const outcomes = await Promise.allSettled(
-      targeted.map(async (emp) => {
-        const { rows } = await db.query(
-          `INSERT INTO simulation_attempts (campaign_id, employee_id) VALUES ($1, $2)
-           ON CONFLICT (campaign_id, employee_id) DO NOTHING
-           RETURNING tracking_token AS "trackingToken"`,
-          [campaign.id, emp.id],
-        );
-        const trackingToken =
-          rows[0]?.trackingToken ||
-          (
-            await db.query(
-              'SELECT tracking_token AS "trackingToken" FROM simulation_attempts WHERE campaign_id = $1 AND employee_id = $2',
-              [campaign.id, emp.id],
-            )
-          ).rows[0].trackingToken;
-
-        const trackingUrl = `${env.publicBackendUrl}/api/campaigns/track/${trackingToken}`;
-        const message = template.body.replace('{{link}}', trackingUrl);
-        await smsClient.sendSms(emp.phoneNumber, message);
-        await db.query(
-          'UPDATE simulation_attempts SET sent_at = now() WHERE campaign_id = $1 AND employee_id = $2',
-          [campaign.id, emp.id],
-        );
-      }),
+    await db.query(
+      "UPDATE simulation_campaigns SET status = 'running', launched_at = now(), failure_reason = NULL WHERE id = $1",
+      [campaign.id],
     );
-
-    const sentCount = outcomes.filter((o) => o.status === 'fulfilled').length;
-    if (sentCount === 0) {
-      const [firstFailure] = outcomes;
-      throw new LaunchError(502, 'Failed to send any SMS messages', firstFailure.reason?.message);
-    }
-
-    await db.query('UPDATE simulation_campaigns SET status = $1 WHERE id = $2', [
-      'running',
-      campaign.id,
-    ]);
-    return `Campaign launched (${sentCount}/${targeted.length} messages sent)`;
+    return `Campaign launched (${targeted.length} messages queued over ${campaign.sendWindowMinutes} min)`;
   }
 
-  return 'Campaign launched';
+  // sent_at is only set after smsClient.sendSms actually resolves — a failed
+  // send (e.g. AT credentials not configured) must not leave an attempt row that
+  // falsely claims the message went out. Each recipient gets their assigned
+  // variant, so the batch is not identical across the department/org.
+  const outcomes = await Promise.allSettled(
+    targeted.map(async (emp) => {
+      const key = assignment.get(emp.id);
+      const tpl = byKey.get(key);
+      const { rows } = await db.query(
+        `INSERT INTO simulation_attempts (campaign_id, employee_id, template_key) VALUES ($1, $2, $3)
+         ON CONFLICT (campaign_id, employee_id) DO UPDATE SET template_key = EXCLUDED.template_key
+         RETURNING tracking_token AS "trackingToken"`,
+        [campaign.id, emp.id, key],
+      );
+      const trackingToken = rows[0].trackingToken;
+      const trackingUrl = `${env.publicBackendUrl}/api/campaigns/track/${trackingToken}`;
+      const message = tpl.body.replace('{{link}}', trackingUrl);
+      await smsClient.sendSms(emp.phoneNumber, message);
+      await db.query(
+        'UPDATE simulation_attempts SET sent_at = now() WHERE campaign_id = $1 AND employee_id = $2',
+        [campaign.id, emp.id],
+      );
+    }),
+  );
+
+  const sentCount = outcomes.filter((o) => o.status === 'fulfilled').length;
+  if (sentCount === 0) {
+    const [firstFailure] = outcomes;
+    throw new LaunchError(502, 'Failed to send any SMS messages', firstFailure.reason?.message);
+  }
+
+  await db.query(
+    "UPDATE simulation_campaigns SET status = 'running', launched_at = now(), failure_reason = NULL WHERE id = $1",
+    [campaign.id],
+  );
+  const variants = new Set(poolKeys).size;
+  return `Campaign launched (${sentCount}/${targeted.length} messages sent${variants > 1 ? `, ${variants} variants` : ''})`;
+}
+
+// Moves a campaign into 'launching' in one statement, so a double-click or a
+// scheduler tick racing a manual launch can only start it once.
+async function claimForLaunch(campaignId, organizationId, statuses = LAUNCHABLE) {
+  const { rows } = await db.query(
+    `UPDATE simulation_campaigns SET status = 'launching'
+     WHERE id = $1 AND organization_id = $2 AND status = ANY($3::text[])
+     RETURNING ${CAMPAIGN_COLUMNS}`,
+    [campaignId, organizationId, statuses],
+  );
+  return rows[0];
+}
+
+async function markFailed(campaignId, reason) {
+  await db.query(
+    "UPDATE simulation_campaigns SET status = 'failed', failure_reason = $2 WHERE id = $1",
+    [campaignId, reason],
+  );
 }
 
 // Launches scheduled campaigns whose time has come. Run on an interval from index.js.
 async function launchDueCampaigns() {
   const { rows } = await db.query(
-    `SELECT ${CAMPAIGN_COLUMNS}, organization_id AS "organizationId"
-     FROM simulation_campaigns WHERE status = 'scheduled' AND scheduled_at <= now()`,
+    `SELECT id, organization_id AS "organizationId" FROM simulation_campaigns
+     WHERE status = 'scheduled' AND scheduled_at <= now() AND authorised_at IS NOT NULL`,
   );
-  for (const campaign of rows) {
+  for (const due of rows) {
+    const campaign = await claimForLaunch(due.id, due.organizationId, ['scheduled']);
+    if (!campaign) continue;
     try {
-      await launchCampaign(campaign, campaign.organizationId);
+      await launchCampaign(campaign, due.organizationId, campaign.departmentId);
     } catch (err) {
-      // Back to draft so a failing launch isn't retried every tick; admin can relaunch manually.
-      await db.query("UPDATE simulation_campaigns SET status = 'draft' WHERE id = $1", [
-        campaign.id,
-      ]);
+      // Marked failed (not retried every tick); the admin can relaunch manually.
+      await markFailed(campaign.id, err.detail ? `${err.message}: ${err.detail}` : err.message);
       console.error(`Scheduled launch of campaign ${campaign.id} failed: ${err.message}`);
     }
   }
 }
 
-router.post('/:id/launch', ...requireAdmin, async (req, res, next) => {
+// Sends queued (jittered) SMS whose moment has come, for running campaigns only,
+// so stopping a campaign also cancels what it has not sent yet. Run on an
+// interval from index.js. A failed send is marked and not retried.
+let dispatching = false;
+async function dispatchQueuedSms() {
+  if (dispatching) return;
+  dispatching = true;
   try {
-    const { rows: campaignRows } = await db.query(
-      `SELECT ${CAMPAIGN_COLUMNS} FROM simulation_campaigns WHERE id = $1 AND organization_id = $2`,
-      [req.params.id, req.user.organizationId],
+    const { rows } = await db.query(
+      `SELECT a.id, a.template_key AS "templateKey", a.tracking_token AS "trackingToken",
+         c.organization_id AS "organizationId", e.phone_number AS "phoneNumber"
+       FROM simulation_attempts a
+       JOIN simulation_campaigns c ON c.id = a.campaign_id
+       JOIN employees e ON e.id = a.employee_id
+       WHERE c.type = 'sms' AND c.status = 'running'
+         AND a.sent_at IS NULL AND a.send_failed_at IS NULL AND a.send_after <= now()
+       ORDER BY a.send_after
+       LIMIT 100`,
     );
-    if (campaignRows.length === 0) return res.status(404).json({ message: 'Campaign not found' });
-    const campaign = campaignRows[0];
-    if (!['draft', 'scheduled'].includes(campaign.status)) {
-      return res.status(409).json({ message: `Campaign is already ${campaign.status}` });
+    for (const attempt of rows) {
+      try {
+        const templates = await loadTemplates([attempt.templateKey], attempt.organizationId);
+        const tpl = templates.get(attempt.templateKey);
+        if (!tpl || !attempt.phoneNumber) throw new Error('template or phone number missing');
+        const trackingUrl = `${env.publicBackendUrl}/api/campaigns/track/${attempt.trackingToken}`;
+        await smsClient.sendSms(attempt.phoneNumber, tpl.body.replace('{{link}}', trackingUrl));
+        await db.query('UPDATE simulation_attempts SET sent_at = now() WHERE id = $1', [attempt.id]);
+      } catch (err) {
+        await db.query('UPDATE simulation_attempts SET send_failed_at = now() WHERE id = $1', [attempt.id]);
+        console.error(`Queued SMS for attempt ${attempt.id} failed: ${err.message}`);
+      }
+    }
+  } finally {
+    dispatching = false;
+  }
+}
+
+router.post('/:id/launch', ...requireAdmin, async (req, res, next) => {
+  if (req.body.acknowledgeAuthorisation !== true) {
+    return res.status(422).json({ message: AUTH_REQUIRED_MESSAGE });
+  }
+
+  let campaign;
+  try {
+    campaign = await claimForLaunch(req.params.id, req.user.organizationId);
+    if (!campaign) {
+      const { rows } = await db.query(
+        'SELECT status FROM simulation_campaigns WHERE id = $1 AND organization_id = $2',
+        [req.params.id, req.user.organizationId],
+      );
+      if (rows.length === 0) return res.status(404).json({ message: 'Campaign not found' });
+      return res.status(409).json({ message: `Campaign is already ${rows[0].status}` });
     }
 
-    const message = await launchCampaign(campaign, req.user.organizationId, req.body.departmentId);
+    await db.query(
+      'UPDATE simulation_campaigns SET authorised_by = $1, authorised_at = now() WHERE id = $2',
+      [req.user.sub, campaign.id],
+    );
+    const message = await launchCampaign(
+      campaign,
+      req.user.organizationId,
+      req.body.departmentId || campaign.departmentId,
+    );
     return res.json({ message });
   } catch (err) {
+    if (campaign) {
+      await markFailed(campaign.id, err.detail ? `${err.message}: ${err.detail}` : err.message);
+    }
     if (err instanceof LaunchError) {
       return res.status(err.status).json({ message: err.message, detail: err.detail });
     }
+    return next(err);
+  }
+});
+
+// Ends a running campaign (or unschedules a scheduled one). A Gophish failure is logged, not fatal.
+router.post('/:id/stop', ...requireAdmin, async (req, res, next) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT ${CAMPAIGN_COLUMNS} FROM simulation_campaigns WHERE id = $1 AND organization_id = $2`,
+      [req.params.id, req.user.organizationId],
+    );
+    if (rows.length === 0) return res.status(404).json({ message: 'Campaign not found' });
+    const campaign = rows[0];
+    if (!['running', 'scheduled'].includes(campaign.status)) {
+      return res.status(409).json({ message: `Campaign is ${campaign.status}` });
+    }
+
+    if (campaign.type === 'email' && campaign.gophishCampaignId) {
+      try {
+        await gophishClient.completeCampaign(campaign.gophishCampaignId);
+      } catch (err) {
+        console.error(`Gophish stop for campaign ${campaign.id} failed: ${err.message}`);
+      }
+    }
+
+    const updateQuery =
+      campaign.status === 'scheduled'
+        ? `UPDATE simulation_campaigns SET status = 'draft', scheduled_at = NULL
+           WHERE id = $1 RETURNING ${CAMPAIGN_COLUMNS}`
+        : `UPDATE simulation_campaigns SET status = 'completed', completed_at = now()
+           WHERE id = $1 RETURNING ${CAMPAIGN_COLUMNS}`;
+    const { rows: updated } = await db.query(updateQuery, [campaign.id]);
+    return res.json(updated[0]);
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// Only drafts and failed launches can be deleted; launched campaigns keep their history.
+router.delete('/:id', ...requireAdmin, async (req, res, next) => {
+  try {
+    const { rows } = await db.query(
+      'SELECT status FROM simulation_campaigns WHERE id = $1 AND organization_id = $2',
+      [req.params.id, req.user.organizationId],
+    );
+    if (rows.length === 0) return res.status(404).json({ message: 'Campaign not found' });
+    if (!['draft', 'failed'].includes(rows[0].status)) {
+      return res.status(409).json({ message: 'Only draft or failed campaigns can be deleted' });
+    }
+    await db.query('DELETE FROM simulation_campaigns WHERE id = $1', [req.params.id]);
+    return res.status(204).send();
+  } catch (err) {
     return next(err);
   }
 });
@@ -398,12 +807,16 @@ router.get('/:id/results', ...requireAdmin, async (req, res, next) => {
 
     const { rows } = await db.query(
       `SELECT employees.id AS "employeeId", employees.full_name AS "employeeName",
+              employees.email, departments.name AS "departmentName",
               simulation_attempts.sent_at AS "sentAt", simulation_attempts.opened_at AS "openedAt",
               simulation_attempts.clicked_at AS "clickedAt",
               simulation_attempts.submitted_credentials_at AS "submittedCredentialsAt",
-              simulation_attempts.reported_at AS "reportedAt"
+              simulation_attempts.reported_at AS "reportedAt",
+              simulation_attempts.send_after AS "sendAfter",
+              simulation_attempts.send_failed_at AS "sendFailedAt"
        FROM simulation_attempts
        JOIN employees ON employees.id = simulation_attempts.employee_id
+       LEFT JOIN departments ON departments.id = employees.department_id
        WHERE simulation_attempts.campaign_id = $1
        ORDER BY employees.full_name`,
       [req.params.id],
@@ -416,3 +829,5 @@ router.get('/:id/results', ...requireAdmin, async (req, res, next) => {
 
 module.exports = router;
 module.exports.launchDueCampaigns = launchDueCampaigns;
+module.exports.dispatchQueuedSms = dispatchQueuedSms;
+module.exports.trackClick = trackClick;

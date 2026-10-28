@@ -53,10 +53,19 @@ function EmployeeOverviewPage() {
           loading={loading}
           label="My Risk Score"
           period={
-            data?.stats.latestScore ? formatDate(data.stats.latestScore.computedAt) : undefined
+            data?.stats.latestScore
+              ? `${formatDate(data.stats.latestScore.computedAt)} · model ${data.stats.latestScore.modelVersion || 'n/a'}`
+              : undefined
           }
           value={score ?? '—'}
           suffix={score !== null ? '/100' : undefined}
+          hint={
+            data?.stats.latestScore
+              ? data.stats.latestScore.lowData
+                ? 'Low-data estimate — based on little history yet'
+                : 'An estimate of susceptibility, not a judgement of you'
+              : 'No score yet — it appears after your first simulation'
+          }
         />
         <StatCard index={1} loading={loading} label="Simulations received" value={attempts.total} />
         <StatCard index={2} loading={loading} label="Times clicked" value={attempts.clicked} />

@@ -37,6 +37,7 @@ venv/
 # ML artifacts
 risk-model/models/*.joblib
 risk-model/models/metadata.json
+risk-model/models/registry.json
 risk-model/data/
 
 # Editor / OS
@@ -47,3 +48,7 @@ Thumbs.db
 
 # Local Gophish install (not part of this monorepo)
 /gophish/
+
+# Local compose overrides
+docker-compose.override.yml
+.claude/

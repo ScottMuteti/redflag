@@ -24,6 +24,7 @@ export function StatCard({
   loading,
   index,
   className,
+  hint,
 }) {
   return (
     <Card index={index} className={cn('flex min-h-[132px] flex-col', className)}>
@@ -68,6 +69,7 @@ export function StatCard({
           )}
         </div>
       )}
+      {!loading && hint && <p className="mt-2 text-xs text-ink-3">{hint}</p>}
     </Card>
   );
 }

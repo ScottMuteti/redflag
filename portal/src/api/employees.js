@@ -29,3 +29,7 @@ export function resetEmployeePassword(id, newPassword) {
 export function deleteEmployee(id) {
   return apiClient.delete(`/employees/${id}`);
 }
+
+export function importEmployees(csv) {
+  return apiClient.post('/employees/import', { csv }).then((res) => res.data);
+}

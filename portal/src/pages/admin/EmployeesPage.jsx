@@ -1,11 +1,12 @@
 /* eslint-disable react/prop-types -- page-local components */
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { CheckCircle2, Copy, KeyRound, Trash2, UserPlus } from 'lucide-react';
+import { CheckCircle2, Copy, KeyRound, Trash2, Upload, UserPlus } from 'lucide-react';
 import { getEmployeeAnalytics } from '../../api/analytics';
 import {
   createEmployee,
   deleteEmployee,
+  importEmployees,
   listDepartments,
   listEmployees,
   resetEmployeePassword,
@@ -27,6 +28,7 @@ import {
   Modal,
   PageHeader,
   PasswordInput,
+  Textarea,
   RiskPill,
   SearchInput,
   useToast,
@@ -56,6 +58,10 @@ async function loadEmployees() {
         ...e,
         score,
         riskLevel: s?.latestScore?.riskLevel || riskLevelOf(score),
+        // Score provenance — shown so a score is never presented as a bare number.
+        scoreComputedAt: s?.latestScore?.computedAt || null,
+        scoreModelVersion: s?.latestScore?.modelVersion || null,
+        scoreLowData: s?.latestScore?.lowData || false,
         attempts: s?.attempts || { total: 0, clicked: 0, submitted: 0 },
         training: s?.training || { totalAssignments: 0, completedAssignments: 0 },
       };
@@ -301,8 +307,21 @@ function EmployeeDrawer({ employee, onClose, onChanged }) {
               {toScore(employee.score) ?? '—'}
               {employee.score !== null && <span className="text-label text-ink-3">/100</span>}
             </span>
-            <RiskPill level={employee.riskLevel} />
+            {employee.score !== null && <RiskPill level={employee.riskLevel} />}
           </div>
+          {employee.score === null ? (
+            <p className="mt-2 text-xs text-ink-3">
+              No score yet — recompute once this employee has simulation history.
+            </p>
+          ) : (
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-3">
+              {employee.scoreLowData && (
+                <Badge tone="warning">Low-data estimate</Badge>
+              )}
+              {employee.scoreComputedAt && <span>Computed {formatDate(employee.scoreComputedAt)}</span>}
+              {employee.scoreModelVersion && <span>· model {employee.scoreModelVersion}</span>}
+            </div>
+          )}
           <Button size="sm" className="mt-3" loading={busy === 'score'} onClick={rescore}>
             Recompute score
           </Button>
@@ -364,6 +383,7 @@ function EmployeesPage() {
   const [query, setQuery] = useState(params.get('q') || '');
   const [department, setDepartment] = useState('all');
   const [adding, setAdding] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [openId, setOpenId] = useState(null);
   const { data, error, loading, reload } = useAsync(loadEmployees);
 
@@ -446,9 +466,14 @@ function EmployeesPage() {
             : 'Loading…'
         }
         actions={
-          <Button variant="primary" icon={UserPlus} onClick={() => setAdding(true)}>
-            Add Employee
-          </Button>
+          <div className="flex gap-2">
+            <Button icon={Upload} onClick={() => setImporting(true)}>
+              Import CSV
+            </Button>
+            <Button variant="primary" icon={UserPlus} onClick={() => setAdding(true)}>
+              Add Employee
+            </Button>
+          </div>
         }
       />
       {error ? (
@@ -502,7 +527,101 @@ function EmployeesPage() {
         departments={data?.departments || []}
       />
       <EmployeeDrawer employee={open} onClose={() => setOpenId(null)} onChanged={reload} />
+      <ImportEmployeesModal
+        open={importing}
+        onClose={() => setImporting(false)}
+        onDone={reload}
+      />
     </>
+  );
+}
+
+function ImportEmployeesModal({ open, onClose, onDone }) {
+  const toast = useToast();
+  const [csv, setCsv] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+
+  function reset() {
+    setCsv('');
+    setResult(null);
+    onClose();
+  }
+
+  async function onFile(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 1024 * 1024) {
+      toast.error('File is larger than 1 MB');
+      return;
+    }
+    setCsv(await file.text());
+  }
+
+  async function submit() {
+    if (!csv.trim()) return;
+    setBusy(true);
+    try {
+      const res = await importEmployees(csv);
+      setResult(res);
+      if (res.inserted > 0) onDone();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Import failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal open={open} onClose={reset} title="Import employees from CSV" size="md">
+      {result ? (
+        <div className="grid gap-3 text-body">
+          <p className="font-semibold text-success">
+            Imported {result.inserted} employee{result.inserted === 1 ? '' : 's'}.
+          </p>
+          {result.rejected?.length > 0 && (
+            <div>
+              <p className="mb-1 font-semibold text-ink">
+                {result.rejected.length} row{result.rejected.length === 1 ? '' : 's'} skipped:
+              </p>
+              <ul className="max-h-48 overflow-auto rounded-control border border-line p-2 text-xs text-ink-2">
+                {result.rejected.map((r, i) => (
+                  <li key={i}>
+                    {r.line ? `Line ${r.line}` : r.email || 'Row'}: {r.reason}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <Button variant="primary" onClick={reset} className="justify-self-start">
+            Done
+          </Button>
+        </div>
+      ) : (
+        <div className="grid gap-3">
+          <p className="text-body text-ink-2">
+            Columns: <code>fullName, email, phoneNumber, jobTitle, hireDate, department</code>.
+            Only <code>fullName</code> and <code>email</code> are required. Phone numbers must be
+            Kenyan (07…, 01… or +2547…). New employees get a random password to reset on first login.
+          </p>
+          <input type="file" accept=".csv,text/csv" onChange={onFile} className="text-body" />
+          <FormField label="Or paste CSV">
+            <Textarea
+              rows={6}
+              value={csv}
+              onChange={(e) => setCsv(e.target.value)}
+              placeholder="fullName,email,phoneNumber,department&#10;Jane Doe,jane@acme.co.ke,0712345678,Finance"
+            />
+          </FormField>
+          <div className="flex justify-end gap-2">
+            <Button onClick={reset}>Cancel</Button>
+            <Button variant="primary" loading={busy} disabled={!csv.trim()} onClick={submit}>
+              Import
+            </Button>
+          </div>
+        </div>
+      )}
+    </Modal>
   );
 }
 

@@ -6,3 +6,5 @@ numpy==1.26.4
 imbalanced-learn==0.12.3
 joblib==1.4.2
 pydantic==2.8.2
+PyYAML==6.0.2
+matplotlib==3.9.2

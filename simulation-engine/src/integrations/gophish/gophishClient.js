@@ -32,19 +32,22 @@ async function createTemplate(name, subject, htmlBody) {
   return data;
 }
 
-// Not called on every launch (a shared landing page is expected to already exist in
-// Gophish, named env.gophish.landingPage) — exposed for one-off provisioning/setup.
+// Not called on every launch (the shared awareness landing page is provisioned
+// once by setup.js, named env.gophish.landingPage) — exposed for ad-hoc setup.
+// RedFlag never captures what a target types: this is an awareness drill, so a
+// submission is recorded only as an event, never with its values.
 async function createLandingPage(name, htmlBody) {
   const { data } = await client.post('/api/pages/', {
     name,
     html: htmlBody,
-    capture_credentials: true,
-    capture_passwords: true,
+    capture_credentials: false,
+    capture_passwords: false,
   });
   return data;
 }
 
-async function createCampaign({ name, groupName, templateName, pageName, url }) {
+// sendByDate (optional) makes Gophish spread the sends between now and then.
+async function createCampaign({ name, groupName, templateName, pageName, url, sendByDate }) {
   const { data } = await client.post('/api/campaigns/', {
     name,
     template: { name: templateName },
@@ -52,6 +55,10 @@ async function createCampaign({ name, groupName, templateName, pageName, url }) 
     url,
     smtp: { name: env.gophish.smtpProfile },
     groups: [{ name: groupName }],
+    ...(sendByDate && {
+      launch_date: new Date().toISOString(),
+      send_by_date: sendByDate.toISOString(),
+    }),
   });
   return data;
 }
@@ -61,4 +68,17 @@ async function getCampaignResults(gophishCampaignId) {
   return data;
 }
 
-module.exports = { createGroup, createTemplate, createLandingPage, createCampaign, getCampaignResults };
+// Marks the campaign complete in Gophish so it stops tracking new events.
+async function completeCampaign(gophishCampaignId) {
+  const { data } = await client.get(`/api/campaigns/${gophishCampaignId}/complete`);
+  return data;
+}
+
+module.exports = {
+  createGroup,
+  createTemplate,
+  createLandingPage,
+  createCampaign,
+  getCampaignResults,
+  completeCampaign,
+};

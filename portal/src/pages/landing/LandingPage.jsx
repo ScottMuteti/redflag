@@ -93,8 +93,8 @@ function AuthButtons({ user, stacked = false }) {
       <Button as={Link} to="/login" variant="outline" className={stacked ? 'w-full' : ''}>
         Log in
       </Button>
-      <Button as={Link} to="/register" variant="primary" className={stacked ? 'w-full' : ''}>
-        Sign up
+      <Button as={Link} to="/request-access" variant="primary" className={stacked ? 'w-full' : ''}>
+        Request access
       </Button>
     </>
   );
@@ -237,18 +237,14 @@ function Hero({ user }) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
         >
-          <span className="inline-flex items-center gap-2 rounded-full bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-800">
-            <span className="size-1.5 rounded-full bg-brand-700" aria-hidden="true" />
-            {HERO.badge}
-          </span>
-          <h1 className="mt-5 text-[44px] leading-[1.02] font-extrabold tracking-tight text-ink sm:text-[56px]">
+          <h1 className="text-[44px] leading-[1.02] font-extrabold tracking-tight text-ink sm:text-[56px]">
             {HEADLINE.lead} <span className="text-brand-700">{HEADLINE.accent}</span>
           </h1>
           <p className="mt-5 max-w-xl text-lg leading-relaxed text-ink-2">{HERO.subheading}</p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Button
               as={Link}
-              to={user ? NAV[user.role]?.home || '/' : '/register'}
+              to={user ? NAV[user.role]?.home || '/' : '/request-access'}
               variant="primary"
               size="lg"
               iconRight={ArrowRight}
@@ -518,8 +514,8 @@ function FinalCta({ user }) {
             </Button>
           ) : (
             <>
-              <Button as={Link} to="/register" variant="white" size="lg">
-                Sign up
+              <Button as={Link} to="/request-access" variant="white" size="lg">
+                Request access
               </Button>
               <Button as={Link} to="/login" variant="white-outline" size="lg">
                 Log in
@@ -568,7 +564,7 @@ function Footer() {
   );
 }
 
-// The public page always leads to Log in / Sign up, even if a session is stored.
+// The public page always leads to Log in / Request access, even if a session is stored.
 function LandingPage() {
   const user = null;
   return (

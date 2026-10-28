@@ -6,19 +6,13 @@ import {
   CheckCircle2,
   Download,
   Filter,
-  Flag,
-  GraduationCap,
   Mail,
   MessageSquare,
-  MousePointerClick,
   RotateCw,
-  TriangleAlert,
 } from 'lucide-react';
-import { getOrganizationAnalytics } from '../../api/analytics';
+import { getOrganizationAnalytics, getScoreRanges } from '../../api/analytics';
 import { listCampaigns, listTemplates } from '../../api/campaigns';
 import {
-  Avatar,
-  Badge,
   Card,
   CardHeader,
   Chip,
@@ -37,7 +31,7 @@ import {
 } from '../../components/ui';
 import { settle, useAsync } from '../../lib/useAsync';
 import { downloadCsv } from '../../lib/csv';
-import { formatDateTime, formatPercent, relativeTime, toScore } from '../../lib/format';
+import { formatPercent, toScore } from '../../lib/format';
 import {
   DATE_RANGES,
   failRatesByTemplate,
@@ -49,7 +43,7 @@ import {
   trendSeries,
   withFunnel,
 } from '../../lib/metrics';
-import { recentEvents, vulnerabilityRanges } from '../../mocks/dashboard';
+import { rangeLabel } from './AnalyticsPage';
 
 const CHANNELS = [
   { value: 'all', label: 'All channels' },
@@ -62,13 +56,6 @@ const PERIODS = [
   { value: 'weekly', label: 'Weekly' },
   { value: 'monthly', label: 'Monthly' },
 ];
-
-const EVENT_META = {
-  reported: { tone: 'success', label: 'Reported', icon: Flag },
-  completed: { tone: 'success', label: 'Trained', icon: GraduationCap },
-  clicked: { tone: 'danger', label: 'Clicked', icon: MousePointerClick },
-  submitted: { tone: 'danger', label: 'Submitted', icon: TriangleAlert },
-};
 
 const pct = (v) => `${v}%`;
 
@@ -87,6 +74,7 @@ function OverviewPage() {
   const [range, setRange] = useState('all');
   const [channel, setChannel] = useState('all');
   const [period, setPeriod] = useState('weekly');
+  const ranges = useAsync(() => getScoreRanges(period), [period]);
 
   const { data, error, loading, reload } = useAsync(() =>
     Promise.all([getOrganizationAnalytics(), listCampaigns(), settle(listTemplates(), [])]).then(
@@ -327,31 +315,27 @@ function OverviewPage() {
           </Card>
 
           <Card index={5}>
-            {/* TODO: replace with API — events come from mocks/dashboard.js */}
-            <CardHeader title="Recent Events" />
-            <ul className="grid gap-3.5">
-              {recentEvents.map((e) => {
-                const meta = EVENT_META[e.outcome];
-                return (
-                  <li key={e.id} className="flex items-center gap-3">
-                    <Avatar icon={meta.icon} tone={meta.tone} />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-body text-ink">
-                        <strong className="font-semibold">{e.name}</strong> {e.text}
-                      </p>
-                      <time
-                        dateTime={e.at}
-                        title={formatDateTime(e.at)}
-                        className="text-xs text-ink-3"
-                      >
-                        {relativeTime(e.at)}
-                      </time>
-                    </div>
-                    <Badge tone={meta.tone}>{meta.label}</Badge>
-                  </li>
-                );
-              })}
-            </ul>
+            <CardHeader
+              title="Training"
+              subtitle="Assigned after simulations"
+              action={
+                <Link
+                  to="/admin/training"
+                  className="text-xs font-bold text-brand-700 hover:underline"
+                >
+                  See All
+                </Link>
+              }
+            />
+            {loading ? (
+              <Skeleton className="h-16" />
+            ) : (
+              <ProgressRow
+                label="Assignments completed"
+                value={data.analytics.training.completionRate}
+                detail={`${data.analytics.training.completedAssignments}/${data.analytics.training.totalAssignments}`}
+              />
+            )}
           </Card>
         </div>
       </div>
@@ -399,19 +383,28 @@ function OverviewPage() {
         </Card>
 
         <Card index={7}>
-          {/* TODO: replace with API — score ranges come from mocks/dashboard.js */}
           <CardHeader
             title="Vulnerability Analytics"
-            subtitle="Score range across employees per simulation wave"
+            subtitle="Lowest to highest employee score per period"
             action={<DropdownButton options={PERIODS} value={period} onChange={setPeriod} />}
           />
-          <LollipopChart
-            data={vulnerabilityRanges[period]}
-            height={230}
-            label={`Vulnerability score ranges (${period}): ${vulnerabilityRanges[period]
-              .map((d) => `${d.label} ${d.min} to ${d.max}`)
-              .join('; ')}`}
-          />
+          {ranges.loading ? (
+            <Skeleton className="h-56" />
+          ) : !ranges.data?.length ? (
+            <p className="py-10 text-center text-body text-ink-3">No scores in this period yet.</p>
+          ) : (
+            <LollipopChart
+              data={ranges.data.map((r) => ({
+                label: rangeLabel(r.bucket, period),
+                min: r.min,
+                max: r.max,
+              }))}
+              height={230}
+              label={`Vulnerability score ranges (${period}): ${ranges.data
+                .map((r) => `${rangeLabel(r.bucket, period)} ${r.min} to ${r.max}`)
+                .join('; ')}`}
+            />
+          )}
           <p className="mt-3 flex items-center gap-1.5 text-xs text-ink-3">
             <CheckCircle2 size={13} className="text-success" aria-hidden="true" />
             Lower and tighter ranges mean fewer highly vulnerable employees.
