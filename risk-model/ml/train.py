@@ -22,7 +22,6 @@ from pathlib import Path
 
 import joblib
 import numpy as np
-import pandas as pd
 import yaml
 from imblearn.over_sampling import SMOTE
 from imblearn.pipeline import Pipeline as ImbPipeline
