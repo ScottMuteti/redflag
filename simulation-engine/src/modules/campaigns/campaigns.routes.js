@@ -16,7 +16,8 @@ const CAMPAIGN_COLUMNS = `
   status, gophish_campaign_id AS "gophishCampaignId", scheduled_at AS "scheduledAt",
   department_id AS "departmentId", launched_at AS "launchedAt", completed_at AS "completedAt",
   authorised_at AS "authorisedAt", failure_reason AS "failureReason",
-  template_pool AS "templatePool", created_at AS "createdAt"
+  template_pool AS "templatePool", send_window_minutes AS "sendWindowMinutes",
+  created_at AS "createdAt"
 `;
 
 const TEMPLATE_COLUMNS = `
@@ -38,6 +39,7 @@ const EVENT_COLUMN = {
 const FAILURE_COLUMNS = ['clicked_at', 'submitted_credentials_at'];
 const RESCORE_COLUMNS = [...FAILURE_COLUMNS, 'reported_at'];
 const LAUNCHABLE = ['draft', 'scheduled', 'failed'];
+const MAX_SEND_WINDOW = 24 * 60; // minutes
 const AUTH_REQUIRED_MESSAGE =
   'Confirm that every recipient is an enrolled employee you are authorised to test (acknowledgeAuthorisation: true)';
 
@@ -325,6 +327,7 @@ router.get('/', ...requireAdmin, async (req, res, next) => {
 
 router.post('/', ...requireAdmin, async (req, res, next) => {
   const { name, type, templateKey, difficultyLevel, scheduledAt, departmentId } = req.body;
+  const sendWindowMinutes = Number(req.body.sendWindowMinutes || 0);
   const acknowledged = req.body.acknowledgeAuthorisation === true;
   // Optional mixed-batch pool: extra template keys; each recipient gets one of
   // the pool (primary templateKey included), so the send is not identical.
@@ -343,6 +346,9 @@ router.post('/', ...requireAdmin, async (req, res, next) => {
   }
   if (difficultyLevel && !DIFFICULTIES.includes(difficultyLevel)) {
     return res.status(400).json({ message: 'difficultyLevel must be easy, medium or hard' });
+  }
+  if (!Number.isInteger(sendWindowMinutes) || sendWindowMinutes < 0 || sendWindowMinutes > MAX_SEND_WINDOW) {
+    return res.status(400).json({ message: `sendWindowMinutes must be a whole number from 0 to ${MAX_SEND_WINDOW}` });
   }
   // Scheduling is a deferred launch, so it needs the same authorisation.
   if (scheduledAt && !acknowledged) {
@@ -382,8 +388,8 @@ router.post('/', ...requireAdmin, async (req, res, next) => {
     const { rows } = await db.query(
       `INSERT INTO simulation_campaigns
          (organization_id, created_by, name, type, template_key, difficulty_level, status,
-          scheduled_at, department_id, authorised_by, authorised_at, template_pool)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+          scheduled_at, department_id, authorised_by, authorised_at, template_pool, send_window_minutes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
        RETURNING ${CAMPAIGN_COLUMNS}`,
       [
         req.user.organizationId,
@@ -398,6 +404,7 @@ router.post('/', ...requireAdmin, async (req, res, next) => {
         acknowledged && scheduledAt ? req.user.sub : null,
         acknowledged && scheduledAt ? new Date() : null,
         templatePool,
+        sendWindowMinutes,
       ],
     );
     return res.status(201).json(rows[0]);
@@ -496,6 +503,9 @@ async function launchCampaign(campaign, organizationId, departmentId) {
       groups.get(key).push(emp);
     }
 
+    // Gophish spreads the emails evenly between launch and sendBy itself.
+    const sendBy =
+      campaign.sendWindowMinutes > 0 ? new Date(Date.now() + campaign.sendWindowMinutes * 60000) : null;
     const sends = [];
     try {
       for (const [key, groupEmps] of groups) {
@@ -509,6 +519,7 @@ async function launchCampaign(campaign, organizationId, departmentId) {
           templateName: gophishTemplate.name,
           pageName: env.gophish.landingPage,
           url: env.gophish.phishUrl,
+          sendByDate: sendBy,
         });
         sends.push({ key, gophishCampaignId: gc.id, employees: groupEmps });
       }
@@ -546,7 +557,8 @@ async function launchCampaign(campaign, organizationId, departmentId) {
       );
     }
     const variants = groups.size;
-    return `Email campaign launched (${employees.length} recipients${variants > 1 ? `, ${variants} message variants` : ''})`;
+    const spread = sendBy ? `, spread over ${campaign.sendWindowMinutes} min` : '';
+    return `Email campaign launched (${employees.length} recipients${variants > 1 ? `, ${variants} message variants` : ''}${spread})`;
   }
 
   const targeted = employees.filter((emp) => emp.phoneNumber);
@@ -557,6 +569,29 @@ async function launchCampaign(campaign, organizationId, departmentId) {
     poolKeys,
     campaign.id,
   );
+
+  // Send-time jitter: queue each message at a random moment in the window and
+  // let dispatchQueuedSms() send it, so the batch does not land all at once.
+  if (campaign.sendWindowMinutes > 0) {
+    const windowMs = campaign.sendWindowMinutes * 60000;
+    await Promise.all(
+      targeted.map((emp) =>
+        db.query(
+          `INSERT INTO simulation_attempts (campaign_id, employee_id, template_key, send_after)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT (campaign_id, employee_id)
+           DO UPDATE SET template_key = EXCLUDED.template_key, send_after = EXCLUDED.send_after,
+             send_failed_at = NULL`,
+          [campaign.id, emp.id, assignment.get(emp.id), new Date(Date.now() + crypto.randomInt(0, windowMs))],
+        ),
+      ),
+    );
+    await db.query(
+      "UPDATE simulation_campaigns SET status = 'running', launched_at = now(), failure_reason = NULL WHERE id = $1",
+      [campaign.id],
+    );
+    return `Campaign launched (${targeted.length} messages queued over ${campaign.sendWindowMinutes} min)`;
+  }
 
   // sent_at is only set after smsClient.sendSms actually resolves — a failed
   // send (e.g. AT credentials not configured) must not leave an attempt row that
@@ -632,6 +667,43 @@ async function launchDueCampaigns() {
       await markFailed(campaign.id, err.detail ? `${err.message}: ${err.detail}` : err.message);
       console.error(`Scheduled launch of campaign ${campaign.id} failed: ${err.message}`);
     }
+  }
+}
+
+// Sends queued (jittered) SMS whose moment has come, for running campaigns only,
+// so stopping a campaign also cancels what it has not sent yet. Run on an
+// interval from index.js. A failed send is marked and not retried.
+let dispatching = false;
+async function dispatchQueuedSms() {
+  if (dispatching) return;
+  dispatching = true;
+  try {
+    const { rows } = await db.query(
+      `SELECT a.id, a.template_key AS "templateKey", a.tracking_token AS "trackingToken",
+         c.organization_id AS "organizationId", e.phone_number AS "phoneNumber"
+       FROM simulation_attempts a
+       JOIN simulation_campaigns c ON c.id = a.campaign_id
+       JOIN employees e ON e.id = a.employee_id
+       WHERE c.type = 'sms' AND c.status = 'running'
+         AND a.sent_at IS NULL AND a.send_failed_at IS NULL AND a.send_after <= now()
+       ORDER BY a.send_after
+       LIMIT 100`,
+    );
+    for (const attempt of rows) {
+      try {
+        const templates = await loadTemplates([attempt.templateKey], attempt.organizationId);
+        const tpl = templates.get(attempt.templateKey);
+        if (!tpl || !attempt.phoneNumber) throw new Error('template or phone number missing');
+        const trackingUrl = `${env.publicBackendUrl}/api/campaigns/track/${attempt.trackingToken}`;
+        await smsClient.sendSms(attempt.phoneNumber, tpl.body.replace('{{link}}', trackingUrl));
+        await db.query('UPDATE simulation_attempts SET sent_at = now() WHERE id = $1', [attempt.id]);
+      } catch (err) {
+        await db.query('UPDATE simulation_attempts SET send_failed_at = now() WHERE id = $1', [attempt.id]);
+        console.error(`Queued SMS for attempt ${attempt.id} failed: ${err.message}`);
+      }
+    }
+  } finally {
+    dispatching = false;
   }
 }
 
@@ -739,7 +811,9 @@ router.get('/:id/results', ...requireAdmin, async (req, res, next) => {
               simulation_attempts.sent_at AS "sentAt", simulation_attempts.opened_at AS "openedAt",
               simulation_attempts.clicked_at AS "clickedAt",
               simulation_attempts.submitted_credentials_at AS "submittedCredentialsAt",
-              simulation_attempts.reported_at AS "reportedAt"
+              simulation_attempts.reported_at AS "reportedAt",
+              simulation_attempts.send_after AS "sendAfter",
+              simulation_attempts.send_failed_at AS "sendFailedAt"
        FROM simulation_attempts
        JOIN employees ON employees.id = simulation_attempts.employee_id
        LEFT JOIN departments ON departments.id = employees.department_id
@@ -755,4 +829,5 @@ router.get('/:id/results', ...requireAdmin, async (req, res, next) => {
 
 module.exports = router;
 module.exports.launchDueCampaigns = launchDueCampaigns;
+module.exports.dispatchQueuedSms = dispatchQueuedSms;
 module.exports.trackClick = trackClick;

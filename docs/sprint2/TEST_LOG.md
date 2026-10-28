@@ -4,12 +4,12 @@ Two kinds of evidence: **automated** (Jest/Supertest for the engine, pytest for
 the risk model — run with `npm test` and `pytest`) and **manual/live** (run
 against the Docker stack on 2026-10-21, recorded below).
 
-Automated totals on 2026-10-22: engine **70 passed**, risk-model **9 passed**.
+Automated totals on 2026-10-22: engine **70 passed**, risk-model **9 passed**. On 2026-10-28: engine **103 passed**.
 
 | ID | Requirement / Obj | Input / conditions | Expected | Actual | P/F | Evidence |
 |----|-------------------|--------------------|----------|--------|-----|----------|
-| T-01 | Register org+admin (O3) | POST /auth/register valid | 201, token, starter modules created | as expected | ✅ | `auth.test.js` |
-| T-02 | Duplicate org/email | second register, same email | 409, rolled back | as expected | ✅ | `auth.test.js` |
+| T-01 | Register org+admin (O3) | POST /auth/register valid | 201, token, starter modules created | as expected (superseded 2026-10-28: sign-up closed, see T-48) | ✅ | `auth.test.js` |
+| T-02 | Duplicate org/email | second register, same email | 409, rolled back | as expected (superseded, see T-49) | ✅ | `auth.test.js` |
 | T-03 | Login rate limit | 11 bad logins in window | 429 after 10 | limiter configured (10/15 min) | ✅ | `auth.routes.js` loginLimiter |
 | T-04 | Tampered/!expired JWT | altered token | 401 | as expected | ✅ | `middleware/auth.js`; `auth.test.js` |
 | T-05 | Launch needs authorisation | POST launch, no ack | 422, nothing sent | 422 (live) | ✅ | live run; `campaigns.test.js` |
@@ -46,6 +46,18 @@ Automated totals on 2026-10-22: engine **70 passed**, risk-model **9 passed**.
 | T-36 | Retake gets new questions (O4) | start quiz after a failed attempt | questions not in the last attempt; options shuffled | 3 new of 6; same set on resume | ✅ | `training.test.js`; live run 2026-10-22 |
 | T-37 | Lesson misses count (O4) | 6 misses, perfect quiz | combined score < 80%, fail | lessons 45%, quiz 100%, overall 66%, failed | ✅ | `training.test.js`; live run 2026-10-22 |
 | T-38 | Retake needs lessons redone (O4) | start quiz after a fail, lessons not redone | 409 | 409; lessons reset to 0 | ✅ | `training.test.js`; live run 2026-10-22 |
+| T-39 | Email 2FA on login | correct password | challenge only, no token; code verifies once | as expected | ✅ | `auth.test.js` |
+| T-40 | 20-min session | verify code | JWT exp − iat = 1200 s | as expected | ✅ | `auth.test.js` |
+| T-41 | Google, pre-approved only | verified Google email, no account | 403 NOT_APPROVED | as expected | ✅ | `auth.test.js` |
+| T-42 | Passkey, unknown credential | assertion for unregistered passkey | 403 NOT_APPROVED | as expected | ✅ | `auth.test.js` |
+| T-43 | Suspended org blocked | valid code, org suspended | 403 ORG_SUSPENDED | as expected | ✅ | `auth.test.js` |
+| T-44 | Password reset | forgot (known/unknown), reset (valid/used/short) | same reply either way; token single-use | as expected | ✅ | `auth.test.js` |
+| T-45 | System admin isolation | org admin calls /api/system | 403 | as expected | ✅ | `system.test.js` |
+| T-46 | Onboard org + invite | system admin POST /system/organizations | 201, set-password link emailed | as expected | ✅ | `system.test.js` |
+| T-48 | Sign-up closed | POST /auth/register; POST /auth/access-requests | 404; 202, request stored, nothing else created, platform admins notified | as expected | ✅ | `auth.test.js` |
+| T-49 | Approve request | system admin approves pending request | org + admin + starter modules in one transaction, invite emailed; re-approve 404 | as expected | ✅ | `system.test.js` |
+| T-50 | Decline request | system admin declines | 204, contact emailed | as expected | ✅ | `system.test.js` |
+| T-47 | Send window | sendWindowMinutes 5000 / 60 | 400 / stored | as expected | ✅ | `system.test.js` |
 
 ## Pending (before/at review)
 - **Integration tests against a real Postgres in CI** — unit tests currently mock the DB; wiring a Postgres service container into CI is cut to Sprint III (documented on the board).

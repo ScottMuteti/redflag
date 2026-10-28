@@ -46,7 +46,8 @@ async function createLandingPage(name, htmlBody) {
   return data;
 }
 
-async function createCampaign({ name, groupName, templateName, pageName, url }) {
+// sendByDate (optional) makes Gophish spread the sends between now and then.
+async function createCampaign({ name, groupName, templateName, pageName, url, sendByDate }) {
   const { data } = await client.post('/api/campaigns/', {
     name,
     template: { name: templateName },
@@ -54,6 +55,10 @@ async function createCampaign({ name, groupName, templateName, pageName, url }) 
     url,
     smtp: { name: env.gophish.smtpProfile },
     groups: [{ name: groupName }],
+    ...(sendByDate && {
+      launch_date: new Date().toISOString(),
+      send_by_date: sendByDate.toISOString(),
+    }),
   });
   return data;
 }

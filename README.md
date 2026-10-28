@@ -25,7 +25,9 @@ logistic regression for Kenyan organizations.
 
 ```mermaid
 flowchart TD
-    A[Register organisation] --> B[Log in]
+    R[Request access] --> P[Platform admin approves]
+    P --> A[Set password from invite email]
+    A --> B[Log in]
     B --> C[Dashboard]
     C --> D[Employees: add roster + departments]
     D --> E[Campaigns: create email or SMS campaign]
@@ -78,6 +80,21 @@ Run a service on its own: `npm run dev` (simulation-engine/portal) or
 - `GOPHISH_API_KEY` — from the Gophish admin UI (Settings). `GOPHISH_WEBHOOK_SECRET` — any random value, shared with the webhook.
 - `GMAIL_USER` / `GMAIL_APP_PASSWORD` — a dedicated Gmail + 16-char App Password (not the login password) for sending simulated email.
 - `AT_API_KEY` — Africa's Talking sandbox key.
+- `GOOGLE_CLIENT_ID` — Google OAuth web client ID (origin `http://localhost:5173`). Blank hides the Google button.
+- `PORTAL_URL` — portal address for reset/invite links (default `http://localhost:5173`).
+- `WEBAUTHN_RP_ID` / `WEBAUTHN_ORIGIN` — passkey host and origin (default `localhost` / `PORTAL_URL`).
+
+### Login
+- Password or Google, then a 6-digit email code. Passkeys (added in Settings) skip the code.
+- Only accounts an admin has added can log in; others land on `/not-approved`.
+- Sessions last 20 minutes.
+- Forgot password: emailed reset link (30 min).
+
+### Roles
+- No self sign-up: orgs request access at `/request-access`; a system admin approves (org created, admin invited) or declines.
+- System admin: reviews requests, onboards/suspends orgs, platform analytics, global templates. `npm run create:system-admin -- <email> "<Name>"` (demo seed: `system@demo.redflag` / `Demo1234!`).
+- Org admin: employees, campaigns, templates, training.
+- Employee: training, quizzes, reports.
 
 ### Email setup (Gophish)
 `docker compose exec simulation-engine npm run gophish:setup` provisions the

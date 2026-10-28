@@ -93,8 +93,8 @@ function AuthButtons({ user, stacked = false }) {
       <Button as={Link} to="/login" variant="outline" className={stacked ? 'w-full' : ''}>
         Log in
       </Button>
-      <Button as={Link} to="/register" variant="primary" className={stacked ? 'w-full' : ''}>
-        Sign up
+      <Button as={Link} to="/request-access" variant="primary" className={stacked ? 'w-full' : ''}>
+        Request access
       </Button>
     </>
   );
@@ -244,7 +244,7 @@ function Hero({ user }) {
           <div className="mt-8 flex flex-wrap gap-3">
             <Button
               as={Link}
-              to={user ? NAV[user.role]?.home || '/' : '/register'}
+              to={user ? NAV[user.role]?.home || '/' : '/request-access'}
               variant="primary"
               size="lg"
               iconRight={ArrowRight}
@@ -514,8 +514,8 @@ function FinalCta({ user }) {
             </Button>
           ) : (
             <>
-              <Button as={Link} to="/register" variant="white" size="lg">
-                Sign up
+              <Button as={Link} to="/request-access" variant="white" size="lg">
+                Request access
               </Button>
               <Button as={Link} to="/login" variant="white-outline" size="lg">
                 Log in
@@ -564,7 +564,7 @@ function Footer() {
   );
 }
 
-// The public page always leads to Log in / Sign up, even if a session is stored.
+// The public page always leads to Log in / Request access, even if a session is stored.
 function LandingPage() {
   const user = null;
   return (

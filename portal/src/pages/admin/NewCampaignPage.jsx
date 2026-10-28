@@ -31,6 +31,13 @@ import { useAsync } from '../../lib/useAsync';
 import { formatDateTime } from '../../lib/format';
 
 const STEPS = ['Details', 'Template', 'Audience', 'Review'];
+// Send-time jitter: spread delivery so the batch doesn't arrive all at once.
+const SEND_WINDOWS = [
+  [0, 'All at once'],
+  [30, 'Over 30 minutes'],
+  [120, 'Over 2 hours'],
+  [480, 'Over a working day (8 hours)'],
+];
 const DIFFICULTY_TONE = { easy: 'success', medium: 'warning', hard: 'danger' };
 
 export function TemplatePreview({ template, subject, body }) {
@@ -66,7 +73,7 @@ export function TemplatePreview({ template, subject, body }) {
 // Internal sample generator panel. Produces editable draft options client-side
 // (no network, no external AI); saving a chosen draft persists it as a reusable
 // org template via the normal API and selects it for the campaign.
-function GeneratePanel({ channel, difficulty, onSaved }) {
+export function GeneratePanel({ channel, difficulty, onSaved, create = createTemplate }) {
   const toast = useToast();
   const categories = useMemo(
     () => CATEGORIES.filter((c) => channelsFor(c).includes(channel)),
@@ -93,7 +100,7 @@ function GeneratePanel({ channel, difficulty, onSaved }) {
   async function saveDraft(draft) {
     setSavingId(draft.id);
     try {
-      const created = await createTemplate(draftToTemplatePayload(draft));
+      const created = await create(draftToTemplatePayload(draft));
       toast.success('Saved to your templates');
       onSaved(created);
       setDrafts((list) => list.filter((d) => d.id !== draft.id));
@@ -190,6 +197,7 @@ function NewCampaignPage() {
     departmentId: '',
     when: 'now',
     scheduledAt: '',
+    sendWindowMinutes: 0,
     mix: false,
     pool: [], // template keys when mix is on; each recipient gets one at random
   });
@@ -283,6 +291,7 @@ function NewCampaignPage() {
           mode === 'launch' && form.when === 'later'
             ? new Date(form.scheduledAt).toISOString()
             : undefined,
+        sendWindowMinutes: form.sendWindowMinutes,
         acknowledgeAuthorisation: mode === 'launch' ? authorised : undefined,
       });
       if (mode === 'launch' && form.when === 'now') {
@@ -594,6 +603,23 @@ function NewCampaignPage() {
                       {label}
                     </label>
                   ))}
+                  <FormField
+                    label="Delivery"
+                    hint="Staggered sends look less like a bulk blast and are harder to warn colleagues about."
+                  >
+                    <Select
+                      value={form.sendWindowMinutes}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, sendWindowMinutes: Number(e.target.value) }))
+                      }
+                    >
+                      {SEND_WINDOWS.map(([value, label]) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </Select>
+                  </FormField>
                   <AuthorisationCheck
                     checked={authorised}
                     onChange={(value) => {

@@ -9,6 +9,7 @@ const scoringRoutes = require('./modules/scoring/scoring.routes');
 const trainingRoutes = require('./modules/training/training.routes');
 const analyticsRoutes = require('./modules/analytics/analytics.routes');
 const reportRoutes = require('./modules/reports/reports.routes');
+const systemRoutes = require('./modules/system/system.routes');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
@@ -34,6 +35,7 @@ app.use('/api/scoring', scoringRoutes);
 app.use('/api/training', trainingRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/system', systemRoutes);
 
 app.use(errorHandler);
 

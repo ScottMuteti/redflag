@@ -52,7 +52,36 @@ const FAQ = {
       'How can I lower my risk score?',
       'Report suspicious messages, avoid clicking unknown links, and finish assigned training. Scores are recalculated over time.',
     ],
-    ['I forgot my password', 'Ask your administrator to set a new one for you.'],
+    [
+      'I forgot my password',
+      'Use “Forgot password?” on the login page to get a reset link by email, or ask your administrator to set a new one.',
+    ],
+    [
+      'Why can’t I log in with Google?',
+      'Google only works for accounts your organisation has added. If you see “Account not approved”, ask your manager to add you.',
+    ],
+  ],
+  system_admin: [
+    [
+      'How do access requests work?',
+      'Organisations can’t sign themselves up. Their requests appear at the top of Organisations: Review to edit and approve (creates the org and emails its admin an invite), or Decline.',
+    ],
+    [
+      'How do I onboard an organisation?',
+      'Organisations → Onboard organisation. Its first admin gets an email link to set a password, then adds employees.',
+    ],
+    [
+      'What does suspending do?',
+      'Admins and employees of a suspended organisation are refused at login. Nothing is deleted; reactivate to restore access.',
+    ],
+    [
+      'How do global templates relate to an organisation’s?',
+      'Global templates are the default library. An organisation can edit its own copy; deleting a global template is blocked while upcoming campaigns use it.',
+    ],
+    [
+      'How is a system admin created?',
+      'Only from the server: npm run create:system-admin -- <email> "<Full Name>". It prints a one-time set-password link.',
+    ],
   ],
 };
 

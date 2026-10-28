@@ -39,6 +39,8 @@ function outcomeOf(r) {
   if (r.reportedAt) return 'reported';
   if (r.openedAt) return 'opened';
   if (r.sentAt) return 'delivered';
+  if (r.sendFailedAt) return 'failed';
+  if (r.sendAfter) return 'queued';
   return 'pending';
 }
 
@@ -48,6 +50,8 @@ const OUTCOME = {
   reported: { tone: 'success', label: 'Reported' },
   opened: { tone: 'warning', label: 'Opened' },
   delivered: { tone: 'neutral', label: 'Delivered' },
+  queued: { tone: 'neutral', label: 'Queued' },
+  failed: { tone: 'danger', label: 'Send failed' },
   pending: { tone: 'neutral', label: 'Not sent' },
 };
 

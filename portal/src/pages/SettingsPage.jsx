@@ -1,10 +1,22 @@
 /* eslint-disable react/prop-types -- page-local components */
 import { useEffect, useState } from 'react';
-import { changePassword, getMe, updateMe, updateOrganization } from '../api/auth';
+import { Fingerprint, Trash2 } from 'lucide-react';
+import { browserSupportsWebAuthn, startRegistration } from '@simplewebauthn/browser';
+import {
+  changePassword,
+  deletePasskey,
+  getMe,
+  listPasskeys,
+  passkeyRegisterOptions,
+  passkeyRegisterVerify,
+  updateMe,
+  updateOrganization,
+} from '../api/auth';
 import { useAuth } from '../context/AuthContext';
 import {
   Button,
   Card,
+  IconButton,
   CardHeader,
   ErrorCard,
   FormField,
@@ -15,6 +27,7 @@ import {
   useToast,
 } from '../components/ui';
 import { useAsync } from '../lib/useAsync';
+import { formatDate, relativeTime } from '../lib/format';
 
 const errorOf = (err, fallback) => err.response?.data?.message || fallback;
 
@@ -111,6 +124,111 @@ function PasswordCard() {
   );
 }
 
+// A label for the new passkey so the list is readable later, e.g. "Windows · Chrome".
+function deviceName() {
+  const ua = navigator.userAgent;
+  const os = /Windows/.test(ua)
+    ? 'Windows'
+    : /iPhone|iPad/.test(ua)
+      ? 'iPhone/iPad'
+      : /Android/.test(ua)
+        ? 'Android'
+        : /Mac/.test(ua)
+          ? 'Mac'
+          : 'Device';
+  const browser = /Edg\//.test(ua)
+    ? 'Edge'
+    : /Chrome\//.test(ua)
+      ? 'Chrome'
+      : /Firefox\//.test(ua)
+        ? 'Firefox'
+        : /Safari\//.test(ua)
+          ? 'Safari'
+          : '';
+  return browser ? `${os} · ${browser}` : os;
+}
+
+function PasskeysCard() {
+  const toast = useToast();
+  const { data, error, loading, reload } = useAsync(listPasskeys);
+  const [adding, setAdding] = useState(false);
+  const supported = browserSupportsWebAuthn();
+
+  async function add() {
+    setAdding(true);
+    try {
+      const { challengeId, options } = await passkeyRegisterOptions();
+      const response = await startRegistration({ optionsJSON: options });
+      await passkeyRegisterVerify(challengeId, response, deviceName());
+      toast.success('Passkey added');
+      reload();
+    } catch (err) {
+      // NotAllowedError = the user closed the browser prompt.
+      if (err.name !== 'NotAllowedError') toast.error(errorOf(err, 'Could not add passkey'));
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  async function remove(passkey) {
+    try {
+      await deletePasskey(passkey.id);
+      toast.success('Passkey removed');
+      reload();
+    } catch (err) {
+      toast.error(errorOf(err, 'Could not remove passkey'));
+    }
+  }
+
+  return (
+    <Card index={2}>
+      <CardHeader title="Passkeys" />
+      <p className="text-body text-ink-2">
+        Sign in with your fingerprint, face or device PIN instead of a password and email code.
+      </p>
+      {error && <p className="mt-3 text-body text-danger">{error}</p>}
+      {loading && !data && <Skeleton className="mt-4 h-12 rounded-control" />}
+      {data?.length > 0 && (
+        <ul className="mt-4 grid gap-2">
+          {data.map((p) => (
+            <li
+              key={p.id}
+              className="flex items-center gap-3 rounded-control border border-line px-3 py-2.5"
+            >
+              <Fingerprint size={18} className="shrink-0 text-brand-700" aria-hidden="true" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-label font-semibold text-ink">{p.name}</p>
+                <p className="text-xs text-ink-2">
+                  Added {formatDate(p.createdAt)}
+                  {p.lastUsedAt && ` · Last used ${relativeTime(new Date(p.lastUsedAt))}`}
+                </p>
+              </div>
+              <IconButton
+                icon={Trash2}
+                variant="ghost"
+                label={`Remove ${p.name}`}
+                onClick={() => remove(p)}
+              />
+            </li>
+          ))}
+        </ul>
+      )}
+      <Button
+        icon={Fingerprint}
+        loading={adding}
+        disabled={!supported}
+        onClick={add}
+        className="mt-4"
+      >
+        Add a passkey
+      </Button>
+      {!supported && (
+        <p className="mt-2 text-xs text-ink-2">This browser doesn’t support passkeys.</p>
+      )}
+    </Card>
+  );
+}
+
 function OrganisationCard({ me, onSaved }) {
   const toast = useToast();
   const [form, setForm] = useState({ name: '', industry: '', county: '' });
@@ -141,7 +259,7 @@ function OrganisationCard({ me, onSaved }) {
   }
 
   return (
-    <Card index={2} className="lg:col-span-2">
+    <Card index={3} className="lg:col-span-2">
       <CardHeader title="Organisation" />
       <form onSubmit={save} className="grid gap-4 sm:grid-cols-3">
         <FormField label="Name" required>
@@ -178,6 +296,7 @@ function SettingsPage() {
         <div className="grid gap-4 lg:grid-cols-2">
           <ProfileCard me={data} onSaved={reload} />
           <PasswordCard />
+          <PasskeysCard />
           {data.role === 'admin' && <OrganisationCard me={data} onSaved={reload} />}
         </div>
       )}

@@ -56,3 +56,11 @@ own Gophish id or any sub-send id. Portal: a "Mixed batch" toggle in the
 campaign wizard turns the template list into a multi-select pool. Defeats the
 "identical message to everyone at once" tell. Send-time jitter is the remaining
 piece (deferred).
+
+## Access and platform admin (2026-10-28)
+- Login: password or Google, then emailed 6-digit code; passkeys (WebAuthn, user verification required) skip the code. Sessions 20 min.
+- Only pre-approved accounts sign in; unknown Google/passkey → `/not-approved`.
+- Self-service reset by emailed single-use link (sha256-stored, 30 min); same link invites new org admins (72 h).
+- Self sign-up closed: public `/request-access` form; system admin approves (onboard + invite) or declines.
+- New `system_admin` role: onboard/suspend orgs, platform analytics (aggregates only), global templates. CLI-created, no sign-up.
+- Send-time jitter: `send_window_minutes` per campaign. SMS queued with a random `send_after`, sent by a 30 s dispatcher; email uses Gophish `send_by_date`.

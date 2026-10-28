@@ -22,8 +22,9 @@ Shows input → processing → output through every layer. Data really flows; no
 
 ## Demo flow
 1. **Register / log in (O3).** Log in as the demo admin. Show the dashboard.
-   *(New-org story: Register creates the org, admin and the four training
-   modules in one transaction.)*
+   *(New-org story: the org requests access at `/request-access`; the system
+   admin approves it under Organisations, which creates the org, admin and
+   starter training in one transaction and emails a set-password invite.)*
 2. **Roster + CSV import (O1).** Employees page → Import CSV. Paste a small CSV
    including one bad row (bad phone). Show valid rows imported and the bad row
    reported with a reason. *(Server-side validation.)*

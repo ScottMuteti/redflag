@@ -17,6 +17,9 @@ Sprint II; extended in Sprint III.
 | O4 | Adaptive training by vector | `training.routes.js`, `maybeAssignTraining` | T-12..T-14, T-20, T-35..T-38 | decision 002; live 2 assignments after click |
 | ethics | Authorised targets only | launch ack + stored approver | T-05 | live 422; migration 003 |
 | ethics | Never store credentials | safe landing page + webhook drops `details` | T-07 | `campaigns.test.js` |
+| security | MFA, approved accounts, 20-min sessions | `auth/session.js`, `passkeys.routes.js`, `passwordReset.routes.js` | T-39..T-44 | `auth.test.js` |
+| ops | Platform admin (onboard, suspend, global templates) | `system/system.routes.js` | T-45, T-46, T-48..T-50 | `system.test.js` |
+| O4 | Realistic delivery (send-time jitter) | `dispatchQueuedSms`, Gophish `send_by_date` | T-47 | `system.test.js` |
 | ethics | Server-side permissions, tenant from JWT | `middleware/auth.js`, tenant-scoped queries | T-04, T-09, T-18 | tests |
 
 ## Gaps to close (Sprint III)

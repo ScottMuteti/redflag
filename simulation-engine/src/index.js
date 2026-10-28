@@ -3,7 +3,7 @@ const app = require('./app');
 const publicApp = require('./publicApp');
 const env = require('./config/env');
 const { migrate } = require('./db/migrate');
-const { launchDueCampaigns } = require('./modules/campaigns/campaigns.routes');
+const { launchDueCampaigns, dispatchQueuedSms } = require('./modules/campaigns/campaigns.routes');
 
 async function start() {
   // The DB container may still be starting; retry a few times before giving up.
@@ -32,6 +32,11 @@ async function start() {
   setInterval(() => {
     launchDueCampaigns().catch((err) => console.error('Campaign scheduler error:', err.message));
   }, 60 * 1000);
+
+  // Jittered SMS sender: checks every 30s for queued messages that are due.
+  setInterval(() => {
+    dispatchQueuedSms().catch((err) => console.error('SMS dispatcher error:', err.message));
+  }, 30 * 1000);
 }
 
 start().catch((err) => {

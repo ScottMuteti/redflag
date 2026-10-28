@@ -9,6 +9,7 @@ const starterModules = require('../modules/training/training.starter');
 const ORG = 'Demo Sacco Ltd';
 const ADMIN = { name: 'Demo Admin', email: 'admin@demo.redflag', password: 'Demo1234!' };
 const EMPLOYEE_PASSWORD = 'Employee123!';
+const SYSTEM_ADMIN = { name: 'Platform Admin', email: 'system@demo.redflag', password: 'Demo1234!' };
 
 const PEOPLE = [
   ['Jane Wanjiku', 'Finance', 'Accountant', '+254700000101', 2019],
@@ -40,6 +41,13 @@ const rand = () => {
 
 async function run() {
   await migrate();
+  // Demo platform admin, created even when the demo org already exists.
+  const { rowCount } = await db.query(
+    `INSERT INTO system_admins (full_name, email, password_hash) VALUES ($1, $2, $3)
+     ON CONFLICT (email) DO NOTHING`,
+    [SYSTEM_ADMIN.name, SYSTEM_ADMIN.email, await bcrypt.hash(SYSTEM_ADMIN.password, 10)],
+  );
+  if (rowCount) console.log(`  System admin: ${SYSTEM_ADMIN.email} / ${SYSTEM_ADMIN.password}`);
   const { rows: existing } = await db.query('SELECT id FROM organizations WHERE name = $1', [ORG]);
   if (existing.length) {
     console.log(`"${ORG}" already exists, nothing to do.`);
