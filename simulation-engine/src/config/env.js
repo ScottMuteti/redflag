@@ -54,6 +54,16 @@ module.exports = {
     rpName: 'RedFlag',
     origin: process.env.WEBAUTHN_ORIGIN || portalUrl,
   },
+  // Phishing reporting. `inbox`/`smsNumber` are the dedicated forward-to address
+  // and number shown to staff. `inboundSecret` gates the inbound webhook that a
+  // mail forwarder or SMS provider uses to POST forwarded reports (email and
+  // SMS) to /api/reports/inbound.
+  reporting: {
+    inbox: process.env.REPORT_INBOX || '',
+    smsNumber: process.env.REPORT_SMS_NUMBER || '',
+    inboundSecret: process.env.REPORT_INBOUND_SECRET || '',
+  },
+  // Template assistant runs locally (no external API / key required).
   mlServiceUrl: process.env.ML_SERVICE_URL || 'http://localhost:8000',
   mlTimeoutMs: Number(process.env.ML_TIMEOUT_MS) || 5000,
   publicBackendUrl: process.env.PUBLIC_BACKEND_URL || 'http://localhost:4000',

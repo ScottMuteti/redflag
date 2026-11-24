@@ -45,7 +45,7 @@ export const NAV = {
         badge: 'pendingTraining',
       },
       { to: '/portal/quizzes', label: 'Quizzes', icon: ListChecks },
-      { to: '/portal/reports', label: 'Reports Sent', icon: Flag },
+      { to: '/portal/reports', label: 'Report', icon: Flag },
     ],
     preferences: [
       { to: '/portal/settings', label: 'Settings', icon: Settings },
@@ -83,7 +83,7 @@ export const SUBTITLES = [
   ['/portal/training/', 'Work through the module, then take the quiz'],
   ['/portal/training', 'Modules assigned to you'],
   ['/portal/quizzes', 'Check what you’ve learned'],
-  ['/portal/reports', 'Suspicious messages you flagged'],
+  ['/portal/reports', 'Flag a suspicious email or text'],
   ['/portal/settings', 'Your account'],
   ['/portal/help', 'Guides and answers'],
   ['/portal', 'Your security score and training at a glance'],

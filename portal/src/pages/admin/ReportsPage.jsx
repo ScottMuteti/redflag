@@ -3,11 +3,12 @@ import { Download, FileSpreadsheet, Flag } from 'lucide-react';
 import { getEmployeeAnalytics, getOrganizationAnalytics } from '../../api/analytics';
 import { listCampaigns } from '../../api/campaigns';
 import { listEmployees } from '../../api/employees';
-import { listReports } from '../../api/reports';
+import { listReports, updateReportStatus } from '../../api/reports';
 import { listAssignments } from '../../api/training';
 import {
   Badge,
   Button,
+  Callout,
   Card,
   CardHeader,
   DataTable,
@@ -114,10 +115,20 @@ const EXPORTS = [
   },
 ];
 
+const STATUS = {
+  new: ['neutral', 'New'],
+  reviewed: ['warning', 'Reviewed'],
+  resolved: ['success', 'Resolved'],
+};
+
 function ReportsPage() {
   const toast = useToast();
   const [running, setRunning] = useState(null);
+  const [savingId, setSavingId] = useState(null);
   const { data, error, loading, reload } = useAsync(listReports);
+  const openThreats = (data || []).filter(
+    (r) => !r.matchedSimulation && r.status !== 'resolved',
+  ).length;
 
   async function run(item) {
     setRunning(item.key);
@@ -130,12 +141,25 @@ function ReportsPage() {
     }
   }
 
+  async function setStatus(report, status) {
+    setSavingId(report.id);
+    try {
+      await updateReportStatus(report.id, status);
+      reload();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Could not update the report');
+    } finally {
+      setSavingId(null);
+    }
+  }
+
   const columns = [
     { key: 'employeeName', header: 'Reported by', sortValue: (r) => r.employeeName },
     {
       key: 'channel',
       header: 'Channel',
-      render: (r) => <span className="capitalize">{r.channel}</span>,
+      render: (r) =>
+        r.channel === 'sms' ? 'SMS' : <span className="capitalize">{r.channel}</span>,
     },
     {
       key: 'subject',
@@ -162,6 +186,51 @@ function ReportsPage() {
       header: 'When',
       sortValue: (r) => r.createdAt,
       render: (r) => formatDateTime(r.createdAt),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      sortValue: (r) => r.status,
+      render: (r) =>
+        r.matchedSimulation ? (
+          <span className="text-xs text-ink-3">—</span>
+        ) : (
+          <Badge tone={STATUS[r.status]?.[0] || 'neutral'}>{STATUS[r.status]?.[1] || 'New'}</Badge>
+        ),
+    },
+    {
+      key: 'actions',
+      header: '',
+      align: 'right',
+      render: (r) =>
+        r.matchedSimulation ? null : (
+          <div className="flex justify-end gap-2">
+            {r.status === 'new' && (
+              <Button size="sm" loading={savingId === r.id} onClick={() => setStatus(r, 'reviewed')}>
+                Mark reviewed
+              </Button>
+            )}
+            {r.status !== 'resolved' ? (
+              <Button
+                size="sm"
+                variant="primary"
+                loading={savingId === r.id}
+                onClick={() => setStatus(r, 'resolved')}
+              >
+                Resolve
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                variant="ghost"
+                loading={savingId === r.id}
+                onClick={() => setStatus(r, 'new')}
+              >
+                Reopen
+              </Button>
+            )}
+          </div>
+        ),
     },
   ];
 
@@ -193,8 +262,19 @@ function ReportsPage() {
         <CardHeader
           className="px-5 pt-5"
           title="Messages flagged by employees"
-          subtitle="Reports that don’t match a simulation may be real attacks. Follow them up."
+          subtitle={
+            openThreats > 0
+              ? `${openThreats} possible real threat${openThreats === 1 ? '' : 's'} awaiting review. Follow them up.`
+              : 'Reports that don’t match a simulation may be real attacks. Follow them up.'
+          }
         />
+        <Callout tone="tip" dismissKey="admin-reports-triage" className="mx-5 mb-3">
+          <span className="font-semibold text-success">Simulation</span> means the employee spotted
+          one of your tests — no action needed.{' '}
+          <span className="font-semibold text-warning">Possible real threat</span> is a message that
+          didn’t match a test; review it, warn others if needed, then mark it{' '}
+          <span className="font-semibold">Resolved</span>.
+        </Callout>
         {error ? (
           <ErrorCard message={error} onRetry={reload} className="m-5" />
         ) : (

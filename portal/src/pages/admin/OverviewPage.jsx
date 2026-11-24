@@ -1,5 +1,5 @@
 /* eslint-disable react/prop-types -- page-local cells */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   CalendarDays,
@@ -29,7 +29,9 @@ import {
   StatCard,
   StatusBadge,
 } from '../../components/ui';
+import LiveIndicator from '../../components/LiveIndicator';
 import { settle, useAsync } from '../../lib/useAsync';
+import { useLiveAttempts } from '../../lib/useLiveAttempts';
 import { downloadCsv } from '../../lib/csv';
 import { formatPercent, toScore } from '../../lib/format';
 import {
@@ -81,6 +83,17 @@ function OverviewPage() {
       ([analytics, campaigns, templates]) => ({ analytics, campaigns, templates }),
     ),
   );
+
+  // Refresh the org-wide stats (click rate, funnels) as events arrive, so the
+  // dashboard tracks an active campaign live. A debounce coalesces bursts.
+  const reloadRef = useRef(reload);
+  reloadRef.current = reload;
+  const debounce = useRef();
+  useEffect(() => () => clearTimeout(debounce.current), []);
+  const { live } = useLiveAttempts(() => {
+    clearTimeout(debounce.current);
+    debounce.current = setTimeout(() => reloadRef.current(), 1200);
+  });
 
   const view = useMemo(() => {
     if (!data) return null;
@@ -165,6 +178,7 @@ function OverviewPage() {
       subtitle="Your organisation's human security posture"
       actions={
         <>
+          <LiveIndicator live={live} className="self-center" />
           <DropdownButton
             icon={CalendarDays}
             options={DATE_RANGES}
@@ -216,6 +230,7 @@ function OverviewPage() {
           trend={view && lastDelta(view.riskSeries)}
           invertGood
           series={view?.riskSeries}
+          hint="Lower is better — your people's average susceptibility"
         />
         <StatCard
           index={1}
@@ -227,6 +242,7 @@ function OverviewPage() {
           invertGood
           series={view?.clickSeries}
           formatPoint={pct}
+          hint="Lower is better — share who clicked a simulated link"
         />
         <StatCard
           index={2}
@@ -239,6 +255,7 @@ function OverviewPage() {
           series={view?.reportSeries}
           formatPoint={pct}
           className="md:col-span-2 xl:col-span-1"
+          hint="Higher is better — share who reported the message"
         />
       </div>
 

@@ -5,6 +5,7 @@ const helmet = require('helmet');
 const authRoutes = require('./modules/auth/auth.routes');
 const employeeRoutes = require('./modules/employees/employees.routes');
 const campaignRoutes = require('./modules/campaigns/campaigns.routes');
+const { trackClick } = campaignRoutes;
 const scoringRoutes = require('./modules/scoring/scoring.routes');
 const trainingRoutes = require('./modules/training/training.routes');
 const analyticsRoutes = require('./modules/analytics/analytics.routes');
@@ -27,6 +28,10 @@ app.use(
 );
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
+
+// Public click-tracking link, at a short believable path (also on publicApp).
+// Used locally when PUBLIC_BACKEND_URL points at this admin port.
+app.get('/s/:token', trackClick);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/employees', employeeRoutes);

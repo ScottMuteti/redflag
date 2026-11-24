@@ -1,0 +1,5 @@
+persona,n,accuracy,actual_fail_rate
+average,165,0.727,0.23
+careful,115,0.757,0.13
+high_risk,25,0.76,0.8
+hurried,95,0.695,0.505

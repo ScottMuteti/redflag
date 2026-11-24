@@ -2,8 +2,13 @@ const request = require('supertest');
 const jwt = require('jsonwebtoken');
 
 jest.mock('../src/config/db');
+jest.mock('../src/modules/scoring/scoring.service', () => ({
+  ...jest.requireActual('../src/modules/scoring/scoring.service'),
+  rescoreAfterEvent: jest.fn().mockResolvedValue(undefined),
+}));
 
 const db = require('../src/config/db');
+const { rescoreAfterEvent } = require('../src/modules/scoring/scoring.service');
 const app = require('../src/app');
 const { maybeAssignTraining } = require('../src/modules/training/training.routes');
 
@@ -57,17 +62,24 @@ describe('GET /api/training/assignments', () => {
   });
 });
 
-const bank = ['Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6'].map((question) => ({
-  question,
+const bank = Array.from({ length: 9 }, (_, i) => ({
+  question: `Q${i + 1}`,
   options: ['a', 'b', 'c'],
   correctIndex: 0,
 }));
+// A graded bank: three questions at each difficulty, for the adaptive-draw tests.
+const graded = [
+  ...['e1', 'e2', 'e3'].map((q) => ({ question: q, options: ['a', 'b', 'c'], correctIndex: 0, difficulty: 'easy' })),
+  ...['m1', 'm2', 'm3'].map((q) => ({ question: q, options: ['a', 'b', 'c'], correctIndex: 0, difficulty: 'medium' })),
+  ...['h1', 'h2', 'h3'].map((q) => ({ question: q, options: ['a', 'b', 'c'], correctIndex: 0, difficulty: 'hard' })),
+];
 const identity = [0, 1, 2];
+const names = (res) => res.body.questions.map((q) => q.question);
 
 describe('POST /api/training/assignments/:id/quiz', () => {
   afterEach(() => jest.clearAllMocks());
 
-  it('draws a retake from questions the last attempt did not use', async () => {
+  it('draws a retake that avoids the questions the last attempt used', async () => {
     db.query
       .mockResolvedValueOnce({ rows: [{ id: 5, employeeId: 10, status: 'failed', quiz: bank, quizServed: null }] })
       .mockResolvedValueOnce({ rows: [{ questions: [0, 1, 2] }] })
@@ -78,9 +90,42 @@ describe('POST /api/training/assignments/:id/quiz', () => {
       .set('Authorization', `Bearer ${token({ sub: 10, role: 'employee' })}`);
 
     expect(res.statusCode).toBe(200);
-    expect(res.body.questions).toHaveLength(3);
-    expect(res.body.questions.map((q) => q.question).sort()).toEqual(['Q4', 'Q5', 'Q6']);
+    // Struggling (prior fail) draws the larger QUIZ_MAX set, all from the six
+    // questions the last attempt did not use.
+    expect(res.body.questions).toHaveLength(6);
+    expect(names(res).sort()).toEqual(['Q4', 'Q5', 'Q6', 'Q7', 'Q8', 'Q9']);
     expect(JSON.stringify(res.body)).not.toContain('correctIndex');
+    expect(rescoreAfterEvent).not.toHaveBeenCalled();
+  });
+
+  it('gives a confident first-timer a smaller, easier-first set', async () => {
+    db.query
+      .mockResolvedValueOnce({ rows: [{ id: 5, employeeId: 10, status: 'in_progress', quiz: graded, quizServed: null }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    const res = await request(app)
+      .post('/api/training/assignments/5/quiz')
+      .set('Authorization', `Bearer ${token({ sub: 10, role: 'employee' })}`);
+
+    expect(res.body.questions).toHaveLength(4);
+    // QUIZ_BASE questions, biased to the easier end: no hard questions yet.
+    expect(names(res).some((q) => q.startsWith('h'))).toBe(false);
+  });
+
+  it('gives a struggling learner a larger, harder-first set', async () => {
+    db.query
+      .mockResolvedValueOnce({ rows: [{ id: 5, employeeId: 10, status: 'failed', quiz: graded, quizServed: null }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    const res = await request(app)
+      .post('/api/training/assignments/5/quiz')
+      .set('Authorization', `Bearer ${token({ sub: 10, role: 'employee' })}`);
+
+    expect(res.body.questions).toHaveLength(6);
+    // QUIZ_MAX questions, biased to the harder end: the easy ones are dropped.
+    expect(names(res).some((q) => q.startsWith('e'))).toBe(false);
   });
 
   it('will not start the quiz before the lessons are finished', async () => {
@@ -133,6 +178,8 @@ describe('POST /api/training/assignments/:id/complete', () => {
     expect(res.body.passed).toBe(true);
     expect(res.body.score).toBe(1);
     expect(res.body.review[0].correctIndex).toBe(1);
+    // Completed training is a model feature, so a pass rescores the employee.
+    expect(rescoreAfterEvent).toHaveBeenCalledWith(10, 1, null);
   });
 
   it('records a fail as failed and logs the attempt', async () => {

@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   postgres:
     image: postgres:16-alpine
@@ -55,7 +53,7 @@ services:
     build: ./portal
     restart: unless-stopped
     ports:
-      - "5173:80"
+      - "${PORTAL_PORT:-5173}:80"
     depends_on:
       - simulation-engine
 

@@ -42,8 +42,9 @@ export function AuthProvider({ children }) {
   const [sessionExpired, setSessionExpired] = useState(false);
 
   const persist = useCallback((token, nextUser) => {
-    localStorage.setItem(TOKEN_KEY, token);
+    // Token last: other tabs react to it and expect the user to be there already.
     localStorage.setItem(USER_KEY, JSON.stringify(nextUser));
+    localStorage.setItem(TOKEN_KEY, token);
     setSessionExpired(false);
     setUser(nextUser);
   }, []);
@@ -60,11 +61,26 @@ export function AuthProvider({ children }) {
     if (!user) return undefined;
     const msLeft = tokenExpiry(localStorage.getItem(TOKEN_KEY)) - Date.now();
     const timer = setTimeout(() => {
+      // A newer login in another tab replaced this session: follow it, don't end it.
+      const stored = readStoredUser();
+      if (stored) {
+        setUser(stored);
+        return;
+      }
       logout();
       setSessionExpired(true);
     }, Math.max(msLeft, 0));
     return () => clearTimeout(timer);
   }, [user, logout]);
+
+  // Tabs share one session, so follow logins and logouts made in another tab.
+  useEffect(() => {
+    const onStorage = (e) => {
+      if (e.key === TOKEN_KEY) setUser(readStoredUser());
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
 
   // Step one: verify the password; a code is emailed. No session yet.
   const beginLogin = useCallback(

@@ -19,7 +19,9 @@ publicApp.use(helmet());
 publicApp.get('/health', (req, res) => res.json({ status: 'ok' }));
 
 // The only route reachable from the internet. GET-only; no body parser needed.
-publicApp.get('/api/campaigns/track/:token', trackClick);
+// Short, believable path so the link in a smishing message does not read like
+// an API endpoint.
+publicApp.get('/s/:token', trackClick);
 
 publicApp.use(errorHandler);
 

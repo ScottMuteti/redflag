@@ -4,6 +4,7 @@ export { Badge, StatusBadge, RiskPill, Chip, TrendText } from './Badge';
 export { Sparkline, AreaTrend, LollipopChart, LineTrend, ChartTooltip } from './Charts';
 export { StatCard, ProgressRow, MiniBar } from './StatCard';
 export { Skeleton, EmptyState, ErrorCard, Tooltip, Avatar } from './Feedback';
+export { Callout } from './Callout';
 export { ToastProvider, useToast } from './Toast';
 export {
   FormField,

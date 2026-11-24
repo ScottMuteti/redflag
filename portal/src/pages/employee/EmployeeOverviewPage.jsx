@@ -1,10 +1,11 @@
 import { Link } from 'react-router-dom';
-import { ArrowRight, GraduationCap } from 'lucide-react';
+import { ArrowRight, GraduationCap, ShieldAlert } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { getEmployeeAnalytics } from '../../api/analytics';
 import { listAssignments } from '../../api/training';
 import {
   Button,
+  Callout,
   Card,
   CardHeader,
   EmptyState,
@@ -46,7 +47,23 @@ function EmployeeOverviewPage() {
 
   return (
     <>
-      <PageHeader title="Overview" subtitle="Your security score and training at a glance" />
+      <PageHeader
+        title="Overview"
+        subtitle="Your security score and training at a glance"
+        actions={
+          <Button as={Link} to="/portal/reports" variant="primary" icon={ShieldAlert}>
+            Report a message
+          </Button>
+        }
+      />
+      <Callout tone="tip" title="Welcome to RedFlag" dismissKey="employee-welcome" className="mb-4">
+        RedFlag helps you practise spotting scam emails and texts in a safe way. Two things to do:
+        finish any training below, and if a message ever looks suspicious,{' '}
+        <Link to="/portal/reports" className="font-semibold text-brand-700">
+          report it
+        </Link>
+        {' '}— you can’t get it wrong, reporting is always the safe choice.
+      </Callout>
       <div className="grid gap-4 md:grid-cols-3">
         <StatCard
           index={0}
@@ -62,8 +79,8 @@ function EmployeeOverviewPage() {
           hint={
             data?.stats.latestScore
               ? data.stats.latestScore.lowData
-                ? 'Low-data estimate — based on little history yet'
-                : 'An estimate of susceptibility, not a judgement of you'
+                ? 'Lower is better · low-data estimate, based on little history yet'
+                : 'Lower is better · an estimate of risk, not a judgement of you'
               : 'No score yet — it appears after your first simulation'
           }
         />

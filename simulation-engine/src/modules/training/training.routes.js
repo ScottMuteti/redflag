@@ -2,13 +2,22 @@ const express = require('express');
 const { authenticate, authorize } = require('../../middleware/auth');
 const db = require('../../config/db');
 const starterModules = require('./training.starter');
+const { rescoreAfterEvent } = require('../scoring/scoring.service');
 
 const router = express.Router();
 router.use(authenticate);
 
 const PASS_THRESHOLD = 0.8;
-// Questions drawn per attempt. Modules with a bigger bank get a different set on a retake.
-const QUIZ_SIZE = 3;
+// Questions drawn per attempt. The draw is adaptive (see drawQuiz): a confident
+// first-timer gets QUIZ_BASE foundational questions; a learner who is struggling
+// — retaking after a fail, or who made several lesson misses — gets up to
+// QUIZ_MAX, weighted harder, for a tougher and more thorough re-test.
+const QUIZ_BASE = 4;
+const QUIZ_MAX = 6;
+
+// Questions may carry difficulty: 'easy' | 'medium' | 'hard'. Untagged = medium.
+const DIFFICULTY_RANK = { easy: 0, medium: 1, hard: 2 };
+const rankOf = (q) => DIFFICULTY_RANK[q?.difficulty] ?? DIFFICULTY_RANK.medium;
 
 const MODULE_COLUMNS = `
   training_modules.id, training_modules.title, training_modules.description,
@@ -48,7 +57,7 @@ function trainingScore({ quizCorrect, quizTotal, items, misses }) {
   return { score, lessonScore, quizScore: quizTotal > 0 ? quizCorrect / quizTotal : 1 };
 }
 
-const quizLength = (quiz) => Math.min(QUIZ_SIZE, Array.isArray(quiz) ? quiz.length : 0);
+const quizLength = (quiz) => Math.min(QUIZ_BASE, Array.isArray(quiz) ? quiz.length : 0);
 
 function shuffle(items) {
   const a = [...items];
@@ -59,14 +68,26 @@ function shuffle(items) {
   return a;
 }
 
-// Picks QUIZ_SIZE questions from the bank, avoiding the last attempt's questions
-// where the bank allows, and shuffles each question's options. Each entry is
-// { q: bank index, order: original option index for each displayed option }.
-function drawQuiz(quiz, lastQuestions = []) {
-  const indexes = shuffle(quiz.map((_, i) => i));
-  const fresh = indexes.filter((i) => !lastQuestions.includes(i));
-  const repeats = indexes.filter((i) => lastQuestions.includes(i));
-  return [...fresh, ...repeats].slice(0, QUIZ_SIZE).map((q) => ({
+// Adaptive draw. Picks questions from the bank and shuffles each question's
+// options. It adapts to the learner:
+//   - size: QUIZ_MAX when `struggling`, else QUIZ_BASE (capped by the bank).
+//   - difficulty: a first-timer gets an easier-first spread to build up; a
+//     struggling learner gets a harder-first spread to confirm mastery.
+//   - repeats: the previous attempt's questions are used last, so a retake is a
+//     fresh test wherever the bank is big enough.
+// Each entry is { q: bank index, order: original option index per displayed option }.
+function drawQuiz(quiz, { lastQuestions = [], struggling = false } = {}) {
+  const size = Math.min(struggling ? QUIZ_MAX : QUIZ_BASE, quiz.length);
+  const isRepeat = (i) => (lastQuestions.includes(i) ? 1 : 0);
+  // Build-up (easy→hard) normally; step-up (hard→easy) when struggling.
+  const diffKey = (i) => (struggling ? DIFFICULTY_RANK.hard - rankOf(quiz[i]) : rankOf(quiz[i]));
+  const chosen = quiz
+    .map((_, i) => ({ i, repeat: isRepeat(i), diff: diffKey(i), r: Math.random() }))
+    .sort((a, b) => a.repeat - b.repeat || a.diff - b.diff || a.r - b.r)
+    .slice(0, size)
+    .map((x) => x.i);
+  // Shuffle the final order so it is not a predictable easy-to-hard run.
+  return shuffle(chosen).map((q) => ({
     q,
     order: shuffle(quiz[q].options.map((_, i) => i)),
   }));
@@ -249,7 +270,14 @@ router.get('/assignments', async (req, res, next) => {
          ORDER BY training_assignments.assigned_at DESC`,
         [req.user.sub],
       );
-      return res.json(rows.map(({ quiz, ...row }) => ({ ...row, quizLength: quizLength(quiz) })));
+      return res.json(
+        rows.map(({ quiz, ...row }) => ({
+          ...row,
+          quizLength: quizLength(quiz),
+          // More than the base set exists, so a struggling learner may get extra.
+          quizAdaptive: Array.isArray(quiz) && quiz.length > QUIZ_BASE,
+        })),
+      );
     }
 
     const { rows } = await db.query(
@@ -406,7 +434,10 @@ router.post('/assignments/:id/quiz', async (req, res, next) => {
        WHERE assignment_id = $1 ORDER BY id DESC LIMIT 1`,
       [assignment.id],
     );
-    const served = drawQuiz(quiz, last[0]?.questions || []);
+    // Adapt to the learner: a prior fail or several lesson misses means a
+    // larger, harder set; a clean first attempt gets the foundational set.
+    const struggling = assignment.status === 'failed' || (assignment.lessonMisses || 0) >= 3;
+    const served = drawQuiz(quiz, { lastQuestions: last[0]?.questions || [], struggling });
     await db.query(
       `UPDATE training_assignments SET quiz_served = $1,
          status = CASE WHEN status = 'assigned' THEN 'in_progress' ELSE status END
@@ -490,6 +521,8 @@ router.post('/assignments/:id/complete', async (req, res, next) => {
         misses,
       ],
     );
+    // Completed training is a model feature, so the score must reflect it.
+    if (passed) await rescoreAfterEvent(assignment.employeeId, req.user.organizationId, null);
 
     return res.json({
       ...updated[0],

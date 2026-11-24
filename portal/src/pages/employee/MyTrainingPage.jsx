@@ -60,7 +60,8 @@ function MyTrainingPage() {
                 <StatusBadge status={a.status} />
               </div>
               <p className="mt-2 text-xs text-ink-3">
-                {a.lessons?.length || 0} lessons · {a.quizLength || 0} quiz questions
+                {a.lessons?.length || 0} lessons · {a.quizLength || 0}
+                {a.quizAdaptive ? '+' : ''} quiz questions
                 {a.estimatedMinutes ? ` · ~${a.estimatedMinutes} min` : ''}
               </p>
               <MiniBar value={progressOf(a)} label={`${a.title} progress`} className="mt-4" />

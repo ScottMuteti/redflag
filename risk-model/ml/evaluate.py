@@ -37,6 +37,35 @@ def classification_metrics(y_true, y_proba, threshold=0.5):
     }
 
 
+def grouped_bootstrap_ci(y_true, y_proba, groups, n_boot=1000, seed=0, threshold=0.5):
+    """95% intervals for the held-out metrics, resampling whole employees.
+
+    One person's rows are correlated, so resampling rows would understate the
+    uncertainty; resampling people keeps each person's rows together.
+    """
+    y_true = np.asarray(y_true)
+    y_proba = np.asarray(y_proba)
+    groups = np.asarray(groups)
+    people = np.unique(groups)
+    rows_of = {g: np.flatnonzero(groups == g) for g in people}
+    rng = np.random.default_rng(seed)
+    samples = {"auc_roc": [], "recall": [], "precision": [], "f1": []}
+    for _ in range(n_boot):
+        idx = np.concatenate([rows_of[g] for g in rng.choice(people, size=len(people))])
+        yt, yp = y_true[idx], y_proba[idx]
+        if len(np.unique(yt)) < 2:
+            continue
+        pred = (yp >= threshold).astype(int)
+        samples["auc_roc"].append(roc_auc_score(yt, yp))
+        samples["recall"].append(recall_score(yt, pred, zero_division=0))
+        samples["precision"].append(precision_score(yt, pred, zero_division=0))
+        samples["f1"].append(f1_score(yt, pred, zero_division=0))
+    return {
+        name: [round(float(np.percentile(v, 2.5)), 4), round(float(np.percentile(v, 97.5)), 4)]
+        for name, v in samples.items()
+    }
+
+
 def save_plots(y_true, y_proba, out_dir, coefficients=None):
     y_pred = (y_proba >= 0.5).astype(int)
 

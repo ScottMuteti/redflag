@@ -3,6 +3,11 @@ const { authenticate, authorize } = require('../../middleware/auth');
 const db = require('../../config/db');
 
 const router = express.Router();
+
+// An attempt counts as received only once delivered: a failed or still-queued
+// send never reached the employee. A click/open/report implies delivery.
+const DELIVERED = `(simulation_attempts.sent_at IS NOT NULL OR simulation_attempts.opened_at IS NOT NULL
+  OR simulation_attempts.clicked_at IS NOT NULL OR simulation_attempts.reported_at IS NOT NULL)`;
 router.use(authenticate);
 
 function bucket(score) {
@@ -31,7 +36,8 @@ router.get('/organization', authorize('admin'), async (req, res, next) => {
          FROM (
            SELECT DISTINCT ON (susceptibility_scores.employee_id) susceptibility_scores.score,
              GREATEST(
-               (SELECT COUNT(*) FROM simulation_attempts WHERE simulation_attempts.employee_id = employees.id),
+               (SELECT COUNT(*) FROM simulation_attempts
+                 WHERE simulation_attempts.employee_id = employees.id AND ${DELIVERED}),
                1
              ) AS weight
            FROM susceptibility_scores
@@ -163,7 +169,8 @@ router.get('/employee/:id', async (req, res, next) => {
         [employeeId, req.user.organizationId],
       ),
       db.query(
-        `SELECT COUNT(*) AS total, COUNT(clicked_at) AS clicked, COUNT(submitted_credentials_at) AS submitted
+        `SELECT COUNT(*) FILTER (WHERE ${DELIVERED}) AS total, COUNT(clicked_at) AS clicked,
+           COUNT(submitted_credentials_at) AS submitted
          FROM simulation_attempts
          JOIN employees ON employees.id = simulation_attempts.employee_id
          WHERE simulation_attempts.employee_id = $1 AND employees.organization_id = $2`,

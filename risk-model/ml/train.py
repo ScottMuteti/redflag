@@ -3,7 +3,12 @@
 Pipeline: KNN impute + scale (numeric) / impute + one-hot (categorical)
 -> SMOTE (training folds only) -> logistic regression, with GridSearchCV over
 a small grid inside stratified 5-fold CV on the 80% training split. The 20%
-held-out set is untouched until the final report.
+held-out set is untouched until the final report. Splits and folds are grouped
+by employee, so one person's rows never sit on both sides of a split.
+
+The reported CV score is NESTED: an outer grouped 5-fold loop scores a grid
+search that only ever saw the outer training folds, so choosing C can't flatter
+it. Hold-out metrics carry 95% intervals from a bootstrap over employees.
 
 Baselines (majority-class and a plain logistic regression) are scored first so
 the full pipeline's AUC can be read against something. Every run writes to
@@ -27,7 +32,8 @@ from imblearn.over_sampling import SMOTE
 from imblearn.pipeline import Pipeline as ImbPipeline
 from sklearn.dummy import DummyClassifier
 from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import GridSearchCV, StratifiedKFold, cross_val_score, train_test_split
+from sklearn.metrics import roc_auc_score
+from sklearn.model_selection import GridSearchCV, StratifiedGroupKFold, cross_val_score
 
 from ml import evaluate
 from ml.data_generation import generate
@@ -94,24 +100,58 @@ def _coefficients(pipeline):
     return {name: round(float(c), 4) for name, c in zip(names, coefs)}
 
 
+def nested_cv(X, y, groups, config, seed):
+    """Unbiased CV: tune on inner folds, score on the untouched outer fold.
+
+    Returns per-fold AUCs, the params each fold chose, and out-of-fold
+    probabilities for every row (each predicted by a model that never saw it).
+    """
+    n_folds = config["split"]["n_folds"]
+    outer = StratifiedGroupKFold(n_splits=n_folds, shuffle=True, random_state=seed)
+    oof = np.zeros(len(y))
+    aucs, chosen = [], []
+    for fit_idx, val_idx in outer.split(X, y, groups):
+        inner = StratifiedGroupKFold(n_splits=n_folds, shuffle=True, random_state=seed + 1)
+        search = GridSearchCV(
+            _full_pipeline(seed), param_grid=config["grid"], cv=inner, scoring="roc_auc"
+        )
+        search.fit(X.iloc[fit_idx], y.iloc[fit_idx], groups=groups.iloc[fit_idx])
+        oof[val_idx] = search.predict_proba(X.iloc[val_idx])[:, 1]
+        aucs.append(roc_auc_score(y.iloc[val_idx], oof[val_idx]))
+        chosen.append(search.best_params_)
+    return np.array(aucs), chosen, oof
+
+
+def group_holdout_split(X, y, groups, test_size, seed):
+    """Stratified hold-out split that keeps each employee on one side only."""
+    splitter = StratifiedGroupKFold(n_splits=round(1 / test_size), shuffle=True, random_state=seed)
+    train_idx, test_idx = next(splitter.split(X, y, groups))
+    return train_idx, test_idx
+
+
 def train(config=None):
     config = config or yaml.safe_load(CONFIG_PATH.read_text())
     seed = config["seed"]
 
     df = generate(config)
     personas = df["_persona"]
-    df = df.drop(columns=["_persona"])
+    employees = df["_employee"]
+    df = df.drop(columns=["_persona", "_employee"])
     X = df[FEATURE_COLUMNS]
     y = df[TARGET]
 
     dataset_csv = df.to_csv(index=False).encode()
     dataset_hash = _sha256_bytes(dataset_csv)
 
-    X_train, X_test, y_train, y_test, _, persona_test = train_test_split(
-        X, y, personas, test_size=config["split"]["test_size"], stratify=y, random_state=seed
-    )
+    train_idx, test_idx = group_holdout_split(X, y, employees, config["split"]["test_size"], seed)
+    X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]
+    y_train, y_test = y.iloc[train_idx], y.iloc[test_idx]
+    groups_train = employees.iloc[train_idx]
+    persona_test = personas.iloc[test_idx]
 
-    cv = StratifiedKFold(n_splits=config["split"]["n_folds"], shuffle=True, random_state=seed)
+    cv = StratifiedGroupKFold(n_splits=config["split"]["n_folds"], shuffle=True, random_state=seed)
+    groups_test = employees.iloc[test_idx]
+    n_boot = config["split"].get("n_bootstrap", 1000)
 
     # --- Baselines -------------------------------------------------------
     majority = DummyClassifier(strategy="most_frequent").fit(X_train, y_train)
@@ -123,11 +163,15 @@ def train(config=None):
             ("classifier", LogisticRegression(max_iter=1000, random_state=seed)),
         ]
     )
-    plain_cv = cross_val_score(plain, X_train, y_train, cv=cv, scoring="roc_auc")
+    plain_cv = cross_val_score(
+        plain, X_train, y_train, groups=groups_train, cv=cv, scoring="roc_auc"
+    )
     plain.fit(X_train, y_train)
     plain_proba = plain.predict_proba(X_test)[:, 1]
 
-    # --- Full pipeline with grid search ----------------------------------
+    # --- Full pipeline: nested CV estimate, then the final grid search ----
+    fold_aucs, fold_params, oof_proba = nested_cv(X_train, y_train, groups_train, config, seed)
+
     search = GridSearchCV(
         _full_pipeline(seed),
         param_grid=config["grid"],
@@ -135,10 +179,9 @@ def train(config=None):
         scoring="roc_auc",
         refit=True,
     )
-    search.fit(X_train, y_train)
+    search.fit(X_train, y_train, groups=groups_train)
     best = search.best_estimator_
 
-    fold_aucs = cross_val_score(best, X_train, y_train, cv=cv, scoring="roc_auc")
     test_proba = best.predict_proba(X_test)[:, 1]
 
     metrics = {
@@ -148,14 +191,23 @@ def train(config=None):
                 "cv_auc_roc_mean": round(float(plain_cv.mean()), 4),
                 "cv_auc_roc_std": round(float(plain_cv.std()), 4),
                 "holdout": evaluate.classification_metrics(y_test, plain_proba),
+                "holdout_ci95": evaluate.grouped_bootstrap_ci(
+                    y_test, plain_proba, groups_test, n_boot, seed
+                ),
             },
         },
         "full_pipeline": {
             "best_params": search.best_params_,
+            "cv": "nested, grouped by employee",
             "cv_auc_roc_mean": round(float(fold_aucs.mean()), 4),
             "cv_auc_roc_std": round(float(fold_aucs.std()), 4),
             "cv_auc_roc_folds": [round(float(a), 4) for a in fold_aucs],
+            "cv_params_per_fold": fold_params,
+            "cv_out_of_fold": evaluate.classification_metrics(y_train, oof_proba),
             "holdout": evaluate.classification_metrics(y_test, test_proba),
+            "holdout_ci95": evaluate.grouped_bootstrap_ci(
+                y_test, test_proba, groups_test, n_boot, seed
+            ),
         },
         "target_auc_roc": config["target_auc_roc"],
         "target_met": bool(evaluate.classification_metrics(y_test, test_proba)["auc_roc"]

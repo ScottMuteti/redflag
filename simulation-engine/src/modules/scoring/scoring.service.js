@@ -14,8 +14,13 @@ async function loadEmployeeFeatures(employeeId, organizationId, context = {}) {
     `SELECT
        employees.hire_date AS "hireDate",
        departments.name AS department,
-       COUNT(simulation_attempts.id) AS "priorSent",
-       COUNT(simulation_attempts.opened_at) AS opened,
+       -- Delivered only: a failed or still-queued send never reached the employee.
+       COUNT(simulation_attempts.id) FILTER (
+         WHERE simulation_attempts.sent_at IS NOT NULL OR simulation_attempts.opened_at IS NOT NULL
+            OR simulation_attempts.clicked_at IS NOT NULL OR simulation_attempts.reported_at IS NOT NULL
+       ) AS "priorSent",
+       -- A click implies an open, as in the training data (SMS opens are untrackable).
+       COUNT(COALESCE(simulation_attempts.opened_at, simulation_attempts.clicked_at)) AS opened,
        COUNT(simulation_attempts.clicked_at) AS clicked,
        COUNT(simulation_attempts.reported_at) AS reported,
        (SELECT COUNT(*) FROM training_assignments

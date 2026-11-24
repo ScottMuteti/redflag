@@ -21,7 +21,7 @@ Status key: ✅ done · 🟡 in progress · ⛔ blocked · ⬜ not started.
 | S2-08 | SMS campaigns via Africa's Talking sandbox | O4 | ✅ | Live: 10/10 sent, msgId `ATXid_179e2c…`; TEST_LOG T-19 |
 | S2-09 | Safe landing page (never captures credentials) | ethics | ✅ | `gophishClient.createLandingPage`, `gophish/setup.js`; TEST_LOG T-07 |
 | S2-10 | Replay-safe, org-scoped event ingestion | O3 | ✅ | `recordEvent`; `tests/campaigns.test.js` (replay, cross-org, no-store) |
-| S2-11 | ML pipeline: data gen, train, evaluate, run folder | O3 | ✅ | `risk-model/ml/`, `ml/runs/20261021074019_2eaeab35/` |
+| S2-11 | ML pipeline: data gen, train, evaluate, run folder | O3 | ✅ | `risk-model/ml/`, `ml/runs/20261030061807_35b36ad9/` |
 | S2-12 | Scoring integration (events → features → stored score) | O3 | ✅ | `scoring.service.js`, `scoringClient.js`; live score 0.59 after click |
 | S2-13 | Cold-start low-data flag | O3 | ✅ | `ml/predict.py`; `tests/test_predict.py` |
 | S2-14 | Adaptive training by failed vector + server-graded quiz | O4 | ✅ | `training.routes.js`; TEST_LOG T-12..T-14, T-35..T-38 |
@@ -32,7 +32,7 @@ Status key: ✅ done · 🟡 in progress · ⛔ blocked · ⬜ not started.
 | S2-19 | Deployment requirements write-up | — | ✅ | `DEPLOYMENT_REQUIREMENTS.md` |
 
 ## Known issues / outstanding defects
-- **ML AUC-ROC 0.71 on synthetic data, below the 0.85 target.** Honest: the non-circular label (predict the *next* simulation's outcome) is genuinely harder than the previous leaky setup. See `TEST_LOG` T-20 and Chapter 5 notes.
+- **ML AUC-ROC 0.76 (95% CI 0.71–0.81; nested CV 0.71) on synthetic data, split by employee, below the 0.85 target.** Honest: the non-circular label (predict the *next* simulation's outcome) is genuinely harder than the previous leaky setup. See `TEST_LOG` T-20 and Chapter 5 notes.
 - **Africa's Talking is sandbox** — SMS links are clickable externally (via the public tunnel) but messages land in the AT simulator, not a real handset. A real handset needs a paid AT account + a CA-approved sender ID. Documented limitation.
 - Test DB for integration tests is not yet wired into CI (unit tests mock the DB) — cut to Sprint III.
 

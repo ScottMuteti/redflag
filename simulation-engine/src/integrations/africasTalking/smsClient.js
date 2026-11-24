@@ -19,8 +19,17 @@ function getSmsService() {
 
 // Each recipient gets a unique tracking link, so messages aren't identical —
 // sent one at a time rather than as a single true "bulk" call.
+// AT answers 2xx even when it rejects a recipient (bad number, no balance,
+// blacklisted), so the per-recipient status decides whether it was sent.
+const ACCEPTED = [100, 101, 102]; // processed, sent, queued
+
 async function sendSms(to, message) {
-  return getSmsService().send({ to: [to], message });
+  const reply = await getSmsService().send({ to: [to], message });
+  const recipient = reply?.SMSMessageData?.Recipients?.[0];
+  if (!recipient || !ACCEPTED.includes(recipient.statusCode)) {
+    throw new Error(recipient?.status || reply?.SMSMessageData?.Message || 'SMS was not accepted');
+  }
+  return reply;
 }
 
 module.exports = { sendSms };

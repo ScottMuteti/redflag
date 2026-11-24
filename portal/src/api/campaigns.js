@@ -31,6 +31,11 @@ export function getCampaignResults(id) {
   return apiClient.get(`/campaigns/${id}/results`).then((res) => res.data);
 }
 
+// Suggests a rewrite (mode: regenerate | refine); nothing is saved.
+export function assistTemplate(payload) {
+  return apiClient.post('/campaigns/templates/assist', payload).then((res) => res.data);
+}
+
 export function createTemplate(payload) {
   return apiClient.post('/campaigns/templates', payload).then((res) => res.data);
 }

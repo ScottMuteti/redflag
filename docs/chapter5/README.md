@@ -51,17 +51,23 @@ mid-point training intervention), label = failure on the next campaign — no
 leakage (features from the past only).
 
 Pipeline: KNN impute + scale / one-hot → SMOTE in training folds only →
-logistic regression; 80/20 split, stratified 5-fold CV, GridSearchCV in-fold.
+logistic regression; 80/20 split, nested 5x5-fold CV (grid search on inner
+folds, scored on outer). Split and folds are grouped by employee, so no person
+is in both train and test. Hold-out 95% intervals: bootstrap over employees.
 
 Results (held-out, synthetic):
-- Majority-class AUC 0.50; plain LR AUC 0.70; full pipeline AUC **0.71**
-  (CV 0.718 ± 0.036). SMOTE lifts recall 0.17 → 0.62.
+- Majority-class AUC 0.50; plain LR AUC 0.76; full pipeline AUC **0.76**
+  (95% CI 0.71–0.81; nested CV 0.711 ± 0.028). SMOTE lifts recall
+  0.17 → 0.66 (CI 0.56–0.75); precision 0.54 (CI 0.46–0.63).
+- The hold-out is 80 people, so its AUC is noisy; the CV figure is the safer
+  estimate. Earlier run `20261021074019` split by row (one person's rows on
+  both sides) and reported 0.71; superseded.
 - **Target AUC ≥ 0.85 NOT met.** State plainly: the honest, non-circular label
   is harder; early-campaign rows (little history) are near-unpredictable, which
   supports the cold-start low-data flag. These are synthetic-data numbers and
   say nothing about real-world effectiveness.
 - *Figures 5.3–5.7*: ROC, PR, calibration, confusion, coefficients from
-  `ml/runs/20261021074019_2eaeab35/`.
+  `ml/runs/20261030061807_35b36ad9/`.
 - *Table 5.4*: metrics.json (baselines vs full pipeline).
 
 Calibration: see the calibration curve + Brier (0.215). A raw score is **not** a

@@ -1,7 +1,17 @@
 /* eslint-disable react/prop-types -- page-local components */
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, Mail, MessageSquare, Rocket, Save, Sparkles } from 'lucide-react';
+import {
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  Mail,
+  Maximize2,
+  MessageSquare,
+  Rocket,
+  Save,
+  Sparkles,
+} from 'lucide-react';
 import {
   createCampaign,
   createTemplate,
@@ -10,6 +20,7 @@ import {
   listTemplates,
 } from '../../api/campaigns';
 import { generate, draftToTemplatePayload, channelsFor, CATEGORIES } from '../../content/generator';
+import { senderFor } from '../../content/banks';
 import { listDepartments, listEmployees } from '../../api/employees';
 import {
   Badge,
@@ -18,6 +29,7 @@ import {
   ErrorCard,
   FormField,
   Input,
+  Modal,
   PageHeader,
   Select,
   Skeleton,
@@ -40,11 +52,16 @@ const SEND_WINDOWS = [
 ];
 const DIFFICULTY_TONE = { easy: 'success', medium: 'warning', hard: 'danger' };
 
-export function TemplatePreview({ template, subject, body }) {
+// The rendered message itself (SMS bubble or email envelope). `from` is a
+// believable sender line derived from the template's category; `expanded`
+// grows the email body for the full-screen view.
+function PreviewSurface({ template, subject, body, from, expanded }) {
   if (template.type === 'sms') {
     return (
-      <div className="mx-auto max-w-xs rounded-card bg-page p-4">
-        <p className="mb-2 text-micro text-ink-3">SMS preview</p>
+      <div className={cn('mx-auto rounded-card bg-page p-4', expanded ? 'max-w-sm' : 'max-w-xs')}>
+        <p className="mb-2 text-micro text-ink-3">
+          SMS from <strong className="text-ink-2">{from || 'Sender'}</strong>
+        </p>
         <p className="rounded-card rounded-bl-sm bg-card p-3 text-body break-words text-ink shadow-card">
           {body.replace('{{link}}', 'https://track.example/abc123')}
         </p>
@@ -53,19 +70,56 @@ export function TemplatePreview({ template, subject, body }) {
   }
   return (
     <div className="overflow-hidden rounded-card border border-line">
-      <div className="border-b border-line bg-page px-4 py-2.5 text-xs text-ink-3">
-        Subject: <strong className="text-ink">{subject}</strong>
+      <div className="grid gap-0.5 border-b border-line bg-page px-4 py-2.5 text-xs text-ink-3">
+        {from && (
+          <div className="truncate">
+            From: <strong className="text-ink">{from}</strong>
+          </div>
+        )}
+        <div className="truncate">
+          Subject: <strong className="text-ink">{subject}</strong>
+        </div>
       </div>
       {/* Admin-authored template HTML, rendered sandboxed with scripts disabled. */}
       <iframe
         title="Email preview"
         sandbox=""
-        className="h-56 w-full bg-white"
-        srcDoc={`<div style="font-family:sans-serif;font-size:14px;padding:12px">${body.replace(
+        className={cn('w-full bg-white', expanded ? 'h-[60vh]' : 'h-56')}
+        srcDoc={`<div style="font-family:sans-serif;font-size:14px;line-height:1.5;padding:16px;color:#111">${body.replace(
           /\{\{\.URL\}\}/g,
           '#',
         )}</div>`}
       />
+    </div>
+  );
+}
+
+// Preview with its own toolbar (no controls overlapping the message) and an
+// Expand action that opens the same surface full-screen for closer review.
+export function TemplatePreview({ template, subject, body }) {
+  const [full, setFull] = useState(false);
+  const from = senderFor(template.category, template.type, template.difficultyLevel || 'medium');
+  const surface = { template, subject, body, from };
+  return (
+    <div className="grid gap-1.5">
+      <div className="flex items-center justify-between">
+        <span className="text-micro font-semibold tracking-wide text-ink-3 uppercase">Preview</span>
+        <Button type="button" size="sm" variant="ghost" icon={Maximize2} onClick={() => setFull(true)}>
+          Expand
+        </Button>
+      </div>
+      <PreviewSurface {...surface} />
+      {full && (
+        <Modal
+          open
+          size="xl"
+          onClose={() => setFull(false)}
+          title={`Preview · ${template.name || (template.type === 'sms' ? 'SMS' : 'Email')}`}
+          description="How the message appears to a recipient. Links are disabled here."
+        >
+          <PreviewSurface {...surface} expanded />
+        </Modal>
+      )}
     </div>
   );
 }
@@ -392,31 +446,72 @@ function NewCampaignPage() {
 
             {step === 1 && (
               <div className="grid gap-5 lg:grid-cols-2">
-                <div className="grid content-start gap-2">
+                <div className="grid content-start gap-3">
+                  {/* Single vs mixed: two clear, tappable cards so it is obvious
+                      a mixed batch means picking more than one template. */}
+                  <fieldset className="grid gap-2">
+                    <legend className="mb-1 text-xs font-semibold text-ink-2">
+                      How many messages?
+                    </legend>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      {[
+                        [false, 'One template', 'Everyone gets the same message'],
+                        [true, 'Mixed batch', 'Pick 2 or more; each person gets a random one'],
+                      ].map(([value, label, hint]) => (
+                        <button
+                          key={String(value)}
+                          type="button"
+                          aria-pressed={form.mix === value}
+                          onClick={() => setForm((f) => ({ ...f, mix: value }))}
+                          className={cn(
+                            'rounded-control border p-3 text-left transition',
+                            form.mix === value
+                              ? 'border-2 border-brand-700 bg-brand-50'
+                              : 'border-line hover:bg-brand-50',
+                          )}
+                        >
+                          <span className="block text-sm font-semibold text-ink">{label}</span>
+                          <span className="block text-xs text-ink-3">{hint}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </fieldset>
+
                   <GeneratePanel
                     channel={form.type}
                     difficulty={form.difficultyLevel}
                     onSaved={handleGeneratedSaved}
                   />
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs font-semibold text-ink-2">
-                      {form.type === 'sms' ? 'SMS' : 'Email'} templates
-                    </p>
-                    <label className="flex cursor-pointer items-center gap-2 text-xs text-ink-2">
-                      <input
-                        type="checkbox"
-                        checked={form.mix}
-                        onChange={(e) => setForm((f) => ({ ...f, mix: e.target.checked }))}
-                      />
-                      Mixed batch
-                    </label>
-                  </div>
+
+                  {/* Live "select 2 or more" guidance for the mixed batch. */}
                   {form.mix && (
-                    <p className="text-xs text-ink-3">
-                      Pick two or more. Each recipient gets a different one at random, so the drill
-                      is not an identical message to everyone.
-                    </p>
+                    <div
+                      className={cn(
+                        'flex items-center gap-2 rounded-control border px-3 py-2 text-xs font-semibold',
+                        form.pool.length >= 2
+                          ? 'border-success/40 bg-success-bg text-success'
+                          : 'border-brand-700/30 bg-brand-50 text-brand-700',
+                      )}
+                      role="status"
+                    >
+                      {form.pool.length >= 2 ? (
+                        <Check size={15} aria-hidden="true" />
+                      ) : (
+                        <span className="grid size-4 shrink-0 place-items-center rounded-full border border-current text-[10px]">
+                          !
+                        </span>
+                      )}
+                      {form.pool.length >= 2
+                        ? `${form.pool.length} selected — tick more to add, or continue.`
+                        : `Select 2 or more templates below · ${form.pool.length} selected`}
+                    </div>
                   )}
+
+                  <p className="text-xs font-semibold text-ink-2">
+                    {form.type === 'sms' ? 'SMS' : 'Email'} templates
+                    {form.mix ? ' · tick the ones to include' : ' · choose one'}
+                  </p>
+
                   {templates.length === 0 && (
                     <p className="text-body text-ink-3">
                       No templates for this channel.{' '}
@@ -425,122 +520,161 @@ function NewCampaignPage() {
                       </Link>
                     </p>
                   )}
-                  {templates.map((t) => (
-                    <button
-                      key={t.key}
-                      type="button"
-                      onClick={() =>
-                        setForm((f) =>
-                          f.mix
-                            ? {
-                                ...f,
-                                pool: f.pool.includes(t.key)
-                                  ? f.pool.filter((k) => k !== t.key)
-                                  : [...f.pool, t.key],
-                              }
-                            : {
-                                ...f,
-                                templateKey: t.key,
-                                difficultyLevel: t.difficultyLevel || f.difficultyLevel,
-                              },
-                        )
-                      }
-                      className={cn(
-                        'flex items-center justify-between gap-3 rounded-control border p-3 text-left transition',
-                        (form.mix ? form.pool.includes(t.key) : form.templateKey === t.key)
-                          ? 'border-2 border-brand-700 bg-brand-50'
-                          : 'border-line hover:bg-brand-50',
-                      )}
-                    >
-                      <span className="min-w-0">
-                        <span className="block truncate font-semibold text-ink">{t.name}</span>
-                        <span className="block text-xs text-ink-3 capitalize">
-                          {t.category || 'general'}
-                          {t.isCustom && ' · customised'}
+                  {templates.map((t) => {
+                    const selected = form.mix ? form.pool.includes(t.key) : form.templateKey === t.key;
+                    return (
+                      <button
+                        key={t.key}
+                        type="button"
+                        aria-pressed={selected}
+                        onClick={() =>
+                          setForm((f) =>
+                            f.mix
+                              ? {
+                                  ...f,
+                                  pool: f.pool.includes(t.key)
+                                    ? f.pool.filter((k) => k !== t.key)
+                                    : [...f.pool, t.key],
+                                }
+                              : {
+                                  ...f,
+                                  templateKey: t.key,
+                                  difficultyLevel: t.difficultyLevel || f.difficultyLevel,
+                                },
+                          )
+                        }
+                        className={cn(
+                          'flex items-center gap-3 rounded-control border p-3 text-left transition',
+                          selected
+                            ? 'border-2 border-brand-700 bg-brand-50'
+                            : 'border-line hover:bg-brand-50',
+                        )}
+                      >
+                        {/* Checkbox-style indicator makes multi-select obvious. */}
+                        {form.mix && (
+                          <span
+                            className={cn(
+                              'grid size-5 shrink-0 place-items-center rounded border transition',
+                              selected
+                                ? 'border-brand-700 bg-brand-700 text-white'
+                                : 'border-line bg-card',
+                            )}
+                            aria-hidden="true"
+                          >
+                            {selected && <Check size={13} strokeWidth={3} />}
+                          </span>
+                        )}
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate font-semibold text-ink">{t.name}</span>
+                          <span className="block text-xs text-ink-3 capitalize">
+                            {t.category || 'general'}
+                            {t.isCustom && ' · customised'}
+                          </span>
                         </span>
-                      </span>
-                      <Badge tone={DIFFICULTY_TONE[t.difficultyLevel] || 'neutral'}>
-                        {t.difficultyLevel || 'medium'}
-                      </Badge>
-                    </button>
-                  ))}
+                        <Badge tone={DIFFICULTY_TONE[t.difficultyLevel] || 'neutral'}>
+                          {t.difficultyLevel || 'medium'}
+                        </Badge>
+                      </button>
+                    );
+                  })}
                   {errors.templateKey && (
                     <p className="text-xs text-danger">{errors.templateKey}</p>
                   )}
                 </div>
-                {form.mix && (
-                  <div className="grid content-start gap-2">
-                    <p className="text-xs font-semibold text-ink-2">
-                      Pool ({form.pool.length} selected)
-                    </p>
-                    {form.pool.length === 0 ? (
-                      <p className="text-body text-ink-3">
-                        Select templates on the left to build the batch.
+
+                {/* RIGHT: previews. Mixed batch shows a preview per selected
+                    template; single mode shows the preview and inline editor. */}
+                <div className="grid content-start gap-3">
+                  {form.mix ? (
+                    <>
+                      <p className="text-xs font-semibold text-ink-2">
+                        Batch preview ({form.pool.length} selected)
                       </p>
-                    ) : (
-                      form.pool.map((key) => {
-                        const t = allTemplates.find((x) => x.key === key);
-                        return (
-                          <div
-                            key={key}
-                            className="flex items-center justify-between gap-2 rounded-control border border-line p-2.5"
-                          >
-                            <span className="truncate text-body text-ink">{t?.name || key}</span>
-                            <Badge tone={DIFFICULTY_TONE[t?.difficultyLevel] || 'neutral'}>
-                              {t?.difficultyLevel || 'medium'}
-                            </Badge>
-                          </div>
-                        );
-                      })
-                    )}
-                    <p className="text-xs text-ink-3">
-                      Recipients are split evenly and at random across these messages.
-                    </p>
-                  </div>
-                )}
-                {!form.mix && template && (
-                  <div className="grid content-start gap-3">
-                    <TemplatePreview template={template} subject={subject} body={body} />
-                    {template.type === 'email' && (
-                      <FormField label="Subject">
-                        <Input
-                          value={subject}
+                      {form.pool.length === 0 ? (
+                        <p className="rounded-control border border-dashed border-line p-4 text-body text-ink-3">
+                          Tick templates on the left to build the batch. Each recipient gets a
+                          different one at random, so the drill is not identical for everyone.
+                        </p>
+                      ) : (
+                        <>
+                          {form.pool.map((key) => {
+                            const t = allTemplates.find((x) => x.key === key);
+                            if (!t) return null;
+                            return (
+                              <div
+                                key={key}
+                                className="grid gap-2 rounded-control border border-line p-3"
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="truncate text-xs font-semibold text-ink">
+                                    {t.name}
+                                  </span>
+                                  <Badge tone={DIFFICULTY_TONE[t.difficultyLevel] || 'neutral'}>
+                                    {t.difficultyLevel || 'medium'}
+                                  </Badge>
+                                </div>
+                                <TemplatePreview
+                                  template={t}
+                                  subject={t.subject || ''}
+                                  body={t.body || ''}
+                                />
+                              </div>
+                            );
+                          })}
+                          <p className="text-xs text-ink-3">
+                            Recipients are split evenly and at random across these messages.
+                          </p>
+                        </>
+                      )}
+                    </>
+                  ) : template ? (
+                    <>
+                      <TemplatePreview template={template} subject={subject} body={body} />
+                      {template.type === 'email' && (
+                        <FormField label="Subject">
+                          <Input
+                            value={subject}
+                            onChange={(e) =>
+                              setEdits((x) => ({
+                                ...x,
+                                [template.key]: { subject: e.target.value, body },
+                              }))
+                            }
+                          />
+                        </FormField>
+                      )}
+                      <FormField
+                        label="Message"
+                        hint={
+                          template.type === 'sms'
+                            ? 'Keep {{link}} where the tracking link goes'
+                            : 'Keep {{.URL}} where the tracking link goes'
+                        }
+                        error={errors.body}
+                      >
+                        <Textarea
+                          rows={template.type === 'sms' ? 4 : 7}
+                          value={body}
                           onChange={(e) =>
                             setEdits((x) => ({
                               ...x,
-                              [template.key]: { subject: e.target.value, body },
+                              [template.key]: { subject, body: e.target.value },
                             }))
                           }
                         />
                       </FormField>
-                    )}
-                    <FormField
-                      label="Message"
-                      hint={
-                        template.type === 'sms'
-                          ? 'Keep {{link}} where the tracking link goes'
-                          : 'Keep {{.URL}} where the tracking link goes'
-                      }
-                      error={errors.body}
-                    >
-                      <Textarea
-                        rows={template.type === 'sms' ? 4 : 7}
-                        value={body}
-                        onChange={(e) =>
-                          setEdits((x) => ({
-                            ...x,
-                            [template.key]: { subject, body: e.target.value },
-                          }))
-                        }
-                      />
-                    </FormField>
-                    {edited && (
-                      <p className="text-xs text-ink-3">
-                        Edits are saved as your organisation’s copy of this template.
-                      </p>
-                    )}
-                  </div>
-                )}
+                      {edited && (
+                        <p className="text-xs text-ink-3">
+                          Edits are saved as your organisation’s copy of this template.
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <p className="rounded-control border border-dashed border-line p-4 text-body text-ink-3">
+                      Select a template on the left to preview and edit it.
+                    </p>
+                  )}
+                </div>
               </div>
             )}
 

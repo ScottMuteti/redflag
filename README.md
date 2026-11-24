@@ -62,11 +62,26 @@ flowchart TD
 
 ## Run locally
 
-1. `cp .env.example .env` and fill in secrets (see below).
-2. `docker compose up --build`
+### Quickest start (Windows, one command)
+
+With [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed, run:
+
+```powershell
+./start.ps1
+```
+
+It starts Docker if needed, builds and launches every service, runs the DB
+migrations, seeds the demo org, prints the logins, and opens the portal at
+<http://localhost:5173>. Safe to re-run. Stop everything with `docker compose down`.
+
+### Manual (any OS)
+
+1. `cp .env.example .env` (the defaults work for a local Docker run; fill in secrets for email/SMS — see below).
+2. `docker compose up -d --build`
 3. Migrations run automatically on engine start (`npm run migrate` to run by hand).
 4. Seed a demo org: `docker compose exec simulation-engine npm run seed:demo`
    (admin `admin@demo.redflag` / `Demo1234!`).
+5. Open <http://localhost:5173>.
 
 Ports: Postgres `5432`, simulation-engine `4000`, risk-model `8000`, portal
 `5173`, Gophish `3333`/`8080`.
@@ -82,6 +97,7 @@ Run a service on its own: `npm run dev` (simulation-engine/portal) or
 - `AT_API_KEY` — Africa's Talking sandbox key.
 - `GOOGLE_CLIENT_ID` — Google OAuth web client ID (origin `http://localhost:5173`). Blank hides the Google button.
 - `PORTAL_URL` — portal address for reset/invite links (default `http://localhost:5173`).
+- `PORTAL_PORT` — portal port if Windows blocks 5173 (change `PORTAL_URL` and `WEBAUTHN_ORIGIN` to match).
 - `WEBAUTHN_RP_ID` / `WEBAUTHN_ORIGIN` — passkey host and origin (default `localhost` / `PORTAL_URL`).
 
 ### Login
@@ -111,7 +127,7 @@ webhook.
   held-out predictions, git commit, data/model checksums).
 - Docker trains on first start if `models/latest.joblib` is missing.
 - **Synthetic data only.** Reported metrics describe the model on synthetic
-  data, never real-world effectiveness. Held-out AUC-ROC is ~0.71 (below the
+  data, never real-world effectiveness. Held-out AUC-ROC is ~0.76 (below the
   0.85 target) with the honest, non-circular label — see `docs/chapter5/`.
 
 ## Sprint II docs

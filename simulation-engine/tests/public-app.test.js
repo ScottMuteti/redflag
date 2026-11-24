@@ -44,14 +44,14 @@ describe('public surface (publicApp)', () => {
       release: jest.fn(),
     });
 
-    const res = await request(publicApp).get('/api/campaigns/track/some-token');
+    const res = await request(publicApp).get('/s/some-token');
     expect(res.status).toBe(200);
-    expect(res.text).toContain('simulated smishing');
+    expect(res.text).toContain('simulated phishing');
   });
 
   it('returns 404 for an unknown tracking token', async () => {
     db.query.mockResolvedValue({ rows: [] });
-    const res = await request(publicApp).get('/api/campaigns/track/nope');
+    const res = await request(publicApp).get('/s/nope');
     expect(res.status).toBe(404);
   });
 });

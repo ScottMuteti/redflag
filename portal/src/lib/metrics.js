@@ -34,7 +34,8 @@ export function withFunnel(campaigns, funnel = []) {
       clicked: f.clicked,
       submitted: f.submitted,
       reported: f.reported,
-      openRate: rate(f.opened, f.totalAttempts),
+      // SMS opens cannot be tracked; show no data instead of 0%.
+      openRate: c.type === 'sms' ? null : rate(f.opened, f.totalAttempts),
       clickRate: rate(f.clicked, f.totalAttempts),
       reportRate: rate(f.reported, f.totalAttempts),
     };

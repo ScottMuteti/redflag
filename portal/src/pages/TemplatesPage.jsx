@@ -2,12 +2,14 @@
 import { useMemo, useState } from 'react';
 import { LayoutTemplate, Mail, MessageSquare, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import {
+  assistTemplate,
   createTemplate,
   customizeTemplate,
   listTemplates,
   resetTemplate,
 } from '../api/campaigns';
 import {
+  assistGlobalTemplate,
   createGlobalTemplate,
   deleteGlobalTemplate,
   listGlobalTemplates,
@@ -34,6 +36,7 @@ import {
   useToast,
 } from '../components/ui';
 import { GeneratePanel, TemplatePreview } from './admin/NewCampaignPage';
+import TemplateAssistant from './TemplateAssistant';
 import { useAsync } from '../lib/useAsync';
 
 const DIFFICULTY_TONE = { easy: 'success', medium: 'warning', hard: 'danger' };
@@ -50,6 +53,7 @@ const SCOPES = {
     create: createTemplate,
     update: (t, payload) => customizeTemplate(t.key, payload),
     remove: (t) => resetTemplate(t.key),
+    assist: assistTemplate,
   },
   system: {
     title: 'Global templates',
@@ -58,6 +62,7 @@ const SCOPES = {
     create: createGlobalTemplate,
     update: (t, payload) => updateGlobalTemplate(t.key, payload),
     remove: (t) => deleteGlobalTemplate(t.key),
+    assist: assistGlobalTemplate,
   },
 };
 
@@ -181,7 +186,7 @@ function TemplateDrawer({ template, scope, onClose, onChanged }) {
         </div>
       }
     >
-      <div className="grid gap-4">
+      <div className="grid gap-4 p-5">
         <TemplatePreview template={template} subject={form.subject} body={form.body} />
         {template.type === 'email' && (
           <FormField label="Subject" required>
@@ -199,6 +204,12 @@ function TemplateDrawer({ template, scope, onClose, onChanged }) {
         >
           <Textarea rows={template.type === 'sms' ? 4 : 10} value={form.body} onChange={set('body')} />
         </FormField>
+        <TemplateAssistant
+          template={template}
+          form={form}
+          assist={api.assist}
+          onApply={(draft) => setForm((f) => ({ ...f, ...draft }))}
+        />
         <FormField label="Difficulty">
           <Select value={form.difficultyLevel} onChange={set('difficultyLevel')}>
             {DIFFICULTIES.map((d) => (

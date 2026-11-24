@@ -55,11 +55,11 @@ Shows input → processing → output through every layer. Data really flows; no
 8. **Admin analytics (O1, O2).** Org risk score, department comparison, campaign
    click/report rates, training completion. Point out honest empty states where
    there's no data yet.
-9. **ML evidence (O3).** Open `risk-model/ml/runs/20261021074019_2eaeab35/`:
+9. **ML evidence (O3).** Open `risk-model/ml/runs/20261030061807_35b36ad9/`:
    `metrics.json` (baselines vs full pipeline), ROC/PR/calibration/confusion
    plots, coefficients, per-persona error analysis. State plainly: held-out
-   AUC-ROC **0.71 on synthetic data**, below the 0.85 target, and why that's the
-   honest number.
+   AUC-ROC **0.76 (95% CI 0.71–0.81; nested CV 0.71) on synthetic data**, split by employee, below the
+   0.85 target, and why that's the honest number.
 
 ## Mixed scenario to show (resilience)
 - A **click** (above) → training + score.

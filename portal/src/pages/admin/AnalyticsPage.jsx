@@ -65,7 +65,7 @@ function AnalyticsPage() {
         .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
         .map((r) => ({
           label: r.name.length > 14 ? `${r.name.slice(0, 13)}…` : r.name,
-          opened: Math.round((r.openRate || 0) * 100),
+          opened: r.openRate === null ? null : Math.round(r.openRate * 100),
           clicked: Math.round((r.clickRate || 0) * 100),
           reported: Math.round((r.reportRate || 0) * 100),
         })),

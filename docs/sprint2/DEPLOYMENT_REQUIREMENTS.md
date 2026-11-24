@@ -25,7 +25,7 @@ The engine binds two ports in one process. Only the public one is internet-facin
 | Surface | Port | Routes | Exposure |
 |---------|------|--------|----------|
 | Admin API | 4000 | auth, employees, campaigns, scoring, analytics, reports, Gophish webhook | Private: internal network / gateway + IP allowlist. Never tunnelled. |
-| Public | 4001 | `GET /api/campaigns/track/:token`, `/health` | Internet-facing (tunnel locally; public HTTPS + domain in prod). |
+| Public | 4001 | `GET /s/:token`, `/health` | Internet-facing (tunnel locally; public HTTPS + domain in prod). |
 
 An admin path on the public surface returns 404 — it is not mounted in that
 listener (`src/publicApp.js`), asserted by `tests/public-app.test.js`. The

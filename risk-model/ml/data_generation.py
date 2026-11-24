@@ -13,6 +13,9 @@ row whose FEATURES summarise campaigns 0..k-1 (their past behaviour) and the
 upcoming campaign's difficulty/vector, and whose LABEL is whether they fail
 campaign k. Features come strictly from the past, the label strictly from the
 next event, so there's no leakage and the persona itself is never a feature.
+
+Each employee contributes several rows, so `_employee` is kept (never a
+feature) for splitting by person: no one is in both the train and test sets.
 """
 
 from pathlib import Path
@@ -97,6 +100,7 @@ def generate(config):
                         "vector": campaign["vector"],
                         "failed": 0,  # filled in just below
                         "_persona": personas[i],
+                        "_employee": i,
                     }
                 )
 
@@ -126,5 +130,5 @@ if __name__ == "__main__":  # pragma: no cover - manual data dump
     out = generate(cfg)
     dest = Path(__file__).resolve().parent.parent / "data" / "synthetic_susceptibility.csv"
     dest.parent.mkdir(exist_ok=True)
-    out.drop(columns=["_persona"]).to_csv(dest, index=False)
+    out.drop(columns=["_persona", "_employee"]).to_csv(dest, index=False)
     print(f"Wrote {len(out)} SYNTHETIC rows to {dest}")

@@ -89,19 +89,28 @@ function SpotLesson({ lesson, onReady, onMiss }) {
     ...message.parts.filter((p, i) => p.flag && shown(`p${i}`)).map((p) => p.flag),
   ];
 
-  const Seg = ({ id, flag, children }) => (
-    <button
-      type="button"
+  // An inline span, not a <button>: buttons can't wrap mid-sentence, which would
+  // break the sample message onto a line per part and give the flags away.
+  const seg = (id, flag, text) => (
+    <span
+      key={id}
+      role="button"
+      tabIndex={0}
       onClick={() => tap(id, Boolean(flag))}
+      onKeyDown={(e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        e.preventDefault();
+        tap(id, Boolean(flag));
+      }}
       className={cn(
-        'rounded px-0.5 text-left transition',
+        'cursor-pointer rounded transition',
         flag && shown(id)
           ? 'bg-danger-bg font-semibold text-danger underline decoration-2'
           : 'hover:bg-brand-50',
       )}
     >
-      {children}
-    </button>
+      {text}
+    </span>
   );
 
   return (
@@ -130,19 +139,13 @@ function SpotLesson({ lesson, onReady, onMiss }) {
         <div className="mb-3 flex items-center gap-2 text-xs text-ink-2">
           {message.channel === 'sms' ? <MessageSquare size={14} /> : <Mail size={14} />}
           <span>From:</span>
-          <Seg id="sender" flag={lesson.senderFlag}>
-            {message.from}
-          </Seg>
+          {seg('sender', lesson.senderFlag, message.from)}
         </div>
         {message.subject && (
           <p className="mb-2 text-body font-semibold text-ink">{message.subject}</p>
         )}
         <p className="rounded-card bg-card p-3 text-body leading-relaxed text-ink shadow-card">
-          {message.parts.map((p, i) => (
-            <Seg key={i} id={`p${i}`} flag={p.flag}>
-              {p.text}
-            </Seg>
-          ))}
+          {message.parts.map((p, i) => seg(`p${i}`, p.flag, p.text))}
         </p>
       </div>
       {explanations.length > 0 && (

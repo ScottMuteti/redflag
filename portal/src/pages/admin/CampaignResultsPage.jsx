@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Download, Mail, MessageSquare, Rocket, Square, Trash2 } from 'lucide-react';
 import {
@@ -27,7 +27,9 @@ import {
   useToast,
 } from '../../components/ui';
 import AuthorisationCheck from '../../components/AuthorisationCheck';
+import LiveIndicator from '../../components/LiveIndicator';
 import { settle, useAsync } from '../../lib/useAsync';
+import { useLiveAttempts } from '../../lib/useLiveAttempts';
 import { downloadCsv } from '../../lib/csv';
 import { formatDate, formatDateTime, formatPercent } from '../../lib/format';
 import { rate } from '../../lib/metrics';
@@ -78,13 +80,26 @@ function CampaignResultsPage() {
     [id],
   );
 
+  // Live updates: when an event lands for this campaign, refresh the numbers.
+  // A short debounce coalesces a burst of clicks into a single reload.
+  const reloadRef = useRef(reload);
+  reloadRef.current = reload;
+  const debounce = useRef();
+  useEffect(() => () => clearTimeout(debounce.current), []);
+  const { live } = useLiveAttempts((event) => {
+    if (String(event.campaignId) !== String(id)) return;
+    clearTimeout(debounce.current);
+    debounce.current = setTimeout(() => reloadRef.current(), 800);
+  });
+
   const stats = useMemo(() => {
     const rows = data?.results || [];
     const n = rows.length;
     const count = (field) => rows.filter((r) => r[field]).length;
     return {
       n,
-      opened: rate(count('openedAt'), n),
+      // SMS opens cannot be tracked; show no data instead of 0%.
+      opened: data?.campaign.type === 'sms' ? null : rate(count('openedAt'), n),
       clicked: rate(count('clickedAt'), n),
       submitted: rate(count('submittedCredentialsAt'), n),
       reported: rate(count('reportedAt'), n),
@@ -255,20 +270,32 @@ function CampaignResultsPage() {
         </p>
       )}
 
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h2 className="text-label font-semibold text-ink">Results</h2>
+        <LiveIndicator live={live} />
+      </div>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard index={0} loading={loading} label="Targets" value={stats.n} />
-        <StatCard index={1} loading={loading} label="Opened" value={formatPercent(stats.opened)} />
+        <StatCard
+          index={1}
+          loading={loading}
+          label="Opened"
+          value={formatPercent(stats.opened)}
+          hint={c?.type === 'sms' ? 'Not trackable over SMS' : undefined}
+        />
         <StatCard
           index={2}
           loading={loading}
           label="Clicked"
           value={formatPercent(stats.clicked)}
+          hint="Lower is better"
         />
         <StatCard
           index={3}
           loading={loading}
           label="Reported"
           value={formatPercent(stats.reported)}
+          hint="Higher is better"
         />
       </div>
 
@@ -312,7 +339,7 @@ function CampaignResultsPage() {
               <Skeleton className="h-32" />
             ) : (
               <div className="grid gap-4">
-                <ProgressRow label="Opened" value={stats.opened} />
+                {c?.type !== 'sms' && <ProgressRow label="Opened" value={stats.opened} />}
                 <ProgressRow label="Clicked the link" value={stats.clicked} />
                 <ProgressRow label="Submitted data" value={stats.submitted} />
                 <ProgressRow label="Reported it" value={stats.reported} />
