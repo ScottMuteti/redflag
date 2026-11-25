@@ -3,7 +3,7 @@
 // Runs client-side in the portal (instant, offline); because it is pure it can
 // also be imported server-side later for per-recipient variant selection.
 
-import { banks, greetings, CATEGORIES, DIFFICULTIES } from './banks.js';
+import { banks, greetings, senderFor, linkUrlFor, CATEGORIES, DIFFICULTIES } from './banks.js';
 
 // Deterministic PRNG (mulberry32) so a given seed reproduces a batch — useful
 // for tests and for "regenerate the same set". Omit the seed for a fresh batch.
@@ -39,19 +39,28 @@ function buildOne(rng, category, channel, difficulty) {
   const b = banks[category][channel][difficulty];
   const label = banks[category].label;
   const name = `${label} · ${channel.toUpperCase()} · ${difficulty}`;
+  const from = senderFor(category, channel, difficulty);
 
   if (channel === 'sms') {
     const body = `${pick(rng, b.sender)}: ${pick(rng, b.hook)} ${pick(rng, b.urgency)} ${pick(rng, b.cta)}: {{link}}`;
-    return { category, channel, type: 'sms', difficulty, name, subject: null, body };
+    return { category, channel, type: 'sms', difficulty, name, from, subject: null, body };
   }
 
   const subject = pick(rng, b.subject);
+  // Email body: greeting, hook, a context paragraph (when the tier has one),
+  // the urgency line, the call-to-action link, then the sign-off. The link text
+  // is a believable themed URL (linkUrlFor); the href is always {{.URL}}, so the
+  // mismatch is the red flag. Falls back to a phrase if no URL for the category.
+  const detail = b.detail ? `<p>${pick(rng, b.detail)}</p>` : '';
+  const linkText = linkUrlFor(category, difficulty) || pick(rng, b.cta);
   const body =
     `<p>${pick(rng, greetings[difficulty])}</p>` +
-    `<p>${pick(rng, b.hook)} ${pick(rng, b.urgency)}</p>` +
-    `<p><a href="{{.URL}}">${pick(rng, b.cta)}</a></p>` +
+    `<p>${pick(rng, b.hook)}</p>` +
+    detail +
+    `<p>${pick(rng, b.urgency)}</p>` +
+    `<p>${pick(rng, b.cta)}: <a href="{{.URL}}">${linkText}</a></p>` +
     `<p>${pick(rng, b.signoff)}</p>`;
-  return { category, channel, type: 'email', difficulty, name, subject, body };
+  return { category, channel, type: 'email', difficulty, name, from, subject, body };
 }
 
 /**

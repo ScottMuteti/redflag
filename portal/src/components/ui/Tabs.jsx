@@ -21,7 +21,7 @@ export function Tabs({ tabs, value, onChange, variant = 'underline', label = 'Ta
       aria-orientation={variant === 'vertical' ? 'vertical' : 'horizontal'}
       onKeyDown={onKeyDown}
       className={cn(
-        variant === 'underline' && 'scrollbar-thin flex gap-5 overflow-x-auto border-b border-line',
+        variant === 'underline' && 'scrollbar-thin flex gap-5 overflow-x-auto overflow-y-hidden border-b border-line',
         variant === 'pill' && 'inline-flex gap-1 rounded-control bg-search p-1',
         variant === 'vertical' && 'grid gap-1',
         className,

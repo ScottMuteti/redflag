@@ -20,12 +20,14 @@ describe('GET /api/analytics/organization', () => {
       .mockResolvedValueOnce({ rows: [{ id: 1, name: 'Safaricom Drill', totalAttempts: '5', opened: '4', clicked: '2', submitted: '1', reported: '1' }] })
       .mockResolvedValueOnce({ rows: [{ total: '10', completed: '4' }] })
       .mockResolvedValueOnce({ rows: [{ week: '2026-09-14T00:00:00Z', value: '0.5' }] })
-      .mockResolvedValueOnce({ rows: [{ week: '2026-09-14T00:00:00Z', value: 0.4 }, { week: '2026-09-21T00:00:00Z', value: 0.2 }] });
+      .mockResolvedValueOnce({ rows: [{ week: '2026-09-14T00:00:00Z', value: 0.4 }, { week: '2026-09-21T00:00:00Z', value: 0.2 }] })
+      .mockResolvedValueOnce({ rows: [{ modelVersion: '20261030061807' }] });
 
     const res = await request(app).get('/api/analytics/organization').set('Authorization', `Bearer ${token()}`);
 
     expect(res.statusCode).toBe(200);
     expect(res.body.riskLevel).toBe('medium');
+    expect(res.body.modelVersion).toBe('20261030061807');
     expect(res.body.departments[0]).toEqual({ department: 'Finance', avgScore: 0.5, employeeCount: 3 });
     expect(res.body.training).toEqual({ totalAssignments: 10, completedAssignments: 4, completionRate: 0.4 });
     expect(res.body.trend).toEqual([

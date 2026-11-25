@@ -10,6 +10,7 @@ const { installStarterModules } = require('../training/training.routes');
 const { sendInviteEmail, sendAccessDeclinedEmail } = require('../../integrations/mail/mailer');
 const { createPasswordLink, INVITE_TTL_MS } = require('../auth/passwordReset.routes');
 const { SALT_ROUNDS } = require('../auth/session');
+const { assistLimiter, assist } = require('../campaigns/templateAssist');
 
 const router = express.Router();
 router.use(authenticate, authorize('system_admin'));
@@ -289,7 +290,7 @@ router.get('/analytics', async (req, res, next) => {
     const { rows: industries } = await db.query(`
       SELECT COALESCE(NULLIF(o.industry, ''), 'Unspecified') AS industry,
         count(DISTINCT o.id)::int AS organizations,
-        avg((a.clicked_at IS NOT NULL)::int)::float AS "clickRate"
+        (avg((a.clicked_at IS NOT NULL)::int) FILTER (WHERE a.id IS NOT NULL))::float AS "clickRate"
       FROM organizations o
       LEFT JOIN simulation_campaigns c ON c.organization_id = o.id
       LEFT JOIN simulation_attempts a ON a.campaign_id = c.id AND a.sent_at IS NOT NULL
@@ -315,6 +316,8 @@ router.get('/templates', async (req, res, next) => {
     return next(err);
   }
 });
+
+router.post('/templates/assist', assistLimiter, assist);
 
 function validateTemplate(body, { partial = false } = {}) {
   const { type, name, subject, body: text, difficultyLevel } = body;

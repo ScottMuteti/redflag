@@ -30,7 +30,12 @@ function QuizzesPage() {
       sortValue: (a) => a.title,
       render: (a) => <span className="font-semibold">{a.title}</span>,
     },
-    { key: 'questions', header: 'Questions', align: 'right', render: (a) => a.quizLength },
+    {
+      key: 'questions',
+      header: 'Questions',
+      align: 'right',
+      render: (a) => `${a.quizLength}${a.quizAdaptive ? '+' : ''}`,
+    },
     {
       key: 'result',
       header: 'Result',

@@ -50,6 +50,10 @@ export function listGlobalTemplates() {
   return apiClient.get('/system/templates').then((res) => res.data);
 }
 
+export function assistGlobalTemplate(payload) {
+  return apiClient.post('/system/templates/assist', payload).then((res) => res.data);
+}
+
 export function createGlobalTemplate(payload) {
   return apiClient.post('/system/templates', payload).then((res) => res.data);
 }

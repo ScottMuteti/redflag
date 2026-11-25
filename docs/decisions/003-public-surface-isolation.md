@@ -5,7 +5,7 @@
 
 ## Context
 Employees click tracked links from their own devices, so the click-tracking
-endpoint (`GET /api/campaigns/track/:token`) must be reachable from the public
+endpoint (`GET /s/:token`) must be reachable from the public
 internet. During local demos this reachability is provided by a Cloudflare
 quick tunnel. A naive tunnel to the engine's port (4000) would also publish the
 entire admin API — auth, employee roster, campaign management, scoring,

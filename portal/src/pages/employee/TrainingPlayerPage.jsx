@@ -89,19 +89,28 @@ function SpotLesson({ lesson, onReady, onMiss }) {
     ...message.parts.filter((p, i) => p.flag && shown(`p${i}`)).map((p) => p.flag),
   ];
 
-  const Seg = ({ id, flag, children }) => (
-    <button
-      type="button"
+  // An inline span, not a <button>: buttons can't wrap mid-sentence, which would
+  // break the sample message onto a line per part and give the flags away.
+  const seg = (id, flag, text) => (
+    <span
+      key={id}
+      role="button"
+      tabIndex={0}
       onClick={() => tap(id, Boolean(flag))}
+      onKeyDown={(e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        e.preventDefault();
+        tap(id, Boolean(flag));
+      }}
       className={cn(
-        'rounded px-0.5 text-left transition',
+        'cursor-pointer rounded transition',
         flag && shown(id)
           ? 'bg-danger-bg font-semibold text-danger underline decoration-2'
           : 'hover:bg-brand-50',
       )}
     >
-      {children}
-    </button>
+      {text}
+    </span>
   );
 
   return (
@@ -130,19 +139,13 @@ function SpotLesson({ lesson, onReady, onMiss }) {
         <div className="mb-3 flex items-center gap-2 text-xs text-ink-2">
           {message.channel === 'sms' ? <MessageSquare size={14} /> : <Mail size={14} />}
           <span>From:</span>
-          <Seg id="sender" flag={lesson.senderFlag}>
-            {message.from}
-          </Seg>
+          {seg('sender', lesson.senderFlag, message.from)}
         </div>
         {message.subject && (
           <p className="mb-2 text-body font-semibold text-ink">{message.subject}</p>
         )}
         <p className="rounded-card bg-card p-3 text-body leading-relaxed text-ink shadow-card">
-          {message.parts.map((p, i) => (
-            <Seg key={i} id={`p${i}`} flag={p.flag}>
-              {p.text}
-            </Seg>
-          ))}
+          {message.parts.map((p, i) => seg(`p${i}`, p.flag, p.text))}
         </p>
       </div>
       {explanations.length > 0 && (
@@ -262,7 +265,9 @@ function Quiz({ assignment, onFinished, onRetake }) {
             aria-hidden="true"
           />
           <p className="mt-2 text-[40px] leading-none font-extrabold text-ink">
-            {Math.round(result.score * 100)}%
+            {/* Floor, not round, so the headline never shows "80%" on a 79.8% fail:
+                floor(score*100) >= 80 is exactly equivalent to passing (>= 0.80). */}
+            {Math.floor(result.score * 100)}%
           </p>
           <p className="mt-2 text-xs text-ink-3">
             Lessons {Math.round(result.lessonScore * 100)}% ({result.lessonMisses} miss
@@ -315,7 +320,7 @@ function Quiz({ assignment, onFinished, onRetake }) {
         <p className="mt-2 text-body text-ink-2">
           Passed
           {assignment.lastScore !== null &&
-            ` with ${Math.round(Number(assignment.lastScore) * 100)}%`}
+            ` with ${Math.floor(Number(assignment.lastScore) * 100)}%`}
           {assignment.quizAttempts > 1 && ` after ${assignment.quizAttempts} attempts`}.
         </p>
       </div>
@@ -396,11 +401,26 @@ function TrainingPlayerPage() {
 
   async function next() {
     const nextStep = step + 1;
+    const unsaved = misses.current;
+    misses.current = 0;
+    // The quiz endpoint rejects with "Finish the lessons first" until the final
+    // lesson's progress is saved. When the next step IS the quiz, save first and
+    // wait, so the quiz load (which mounts as soon as step advances) can't race
+    // ahead of it. Between lessons the save stays best-effort for a snappy flow.
+    if (nextStep >= lessons.length) {
+      try {
+        await saveLessonProgress(assignment.id, nextStep, unsaved);
+      } catch {
+        // Best-effort; the quiz load self-heals a missed save below.
+      }
+      setStep(nextStep);
+      setReady(false);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
     setStep(nextStep);
     setReady(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    const unsaved = misses.current;
-    misses.current = 0;
     try {
       await saveLessonProgress(assignment.id, nextStep, unsaved);
     } catch {

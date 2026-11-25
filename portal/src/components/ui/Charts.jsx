@@ -281,7 +281,22 @@ export function LollipopChart({ data, height = 240, format = String, label }) {
 // Plain multi-series line chart for comparisons (e.g. click vs report rate).
 export function LineTrend({ data, series, height = 220, format = String, label }) {
   return (
-    <div role="img" aria-label={label} style={{ height }}>
+    <div>
+      {series.length > 1 && (
+        <ul className="mb-2 flex flex-wrap gap-x-4 gap-y-1 text-micro text-ink-2">
+          {series.map((s) => (
+            <li key={s.key} className="inline-flex items-center gap-1.5">
+              <span
+                className="w-4"
+                style={{ borderTop: `2px ${s.dashed ? 'dashed' : 'solid'} ${s.color}` }}
+                aria-hidden="true"
+              />
+              {s.name}
+            </li>
+          ))}
+        </ul>
+      )}
+      <div role="img" aria-label={label} style={{ height }}>
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ top: 12, right: 8, bottom: 0, left: 0 }}>
           <CartesianGrid vertical={false} stroke="var(--border)" strokeDasharray="3 3" />
@@ -320,6 +335,7 @@ export function LineTrend({ data, series, height = 220, format = String, label }
           ))}
         </LineChart>
       </ResponsiveContainer>
+      </div>
     </div>
   );
 }

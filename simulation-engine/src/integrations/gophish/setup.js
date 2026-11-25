@@ -11,6 +11,7 @@ require('dotenv').config();
 const axios = require('axios');
 const https = require('https');
 const env = require('../../config/env');
+const { debriefHtml } = require('../../landing/debriefPage');
 
 const SMTP_NAME = env.gophish.smtpProfile;
 const PAGE_NAME = env.gophish.landingPage;
@@ -19,24 +20,10 @@ const WEBHOOK_NAME = 'RedFlag Engine';
 const WEBHOOK_URL =
   process.env.GOPHISH_WEBHOOK_URL || 'http://simulation-engine:4000/api/campaigns/webhook/gophish';
 
-// Shown to anyone who clicks: this was a drill, with no field to type anything into.
-const SAFE_LANDING_HTML = `<!doctype html>
-<html lang="en">
-  <head><meta charset="utf-8" /><title>Security awareness simulation</title></head>
-  <body style="font-family: system-ui, sans-serif; max-width: 540px; margin: 4rem auto; padding: 0 1rem; color: #0f172a;">
-    <h1>This was a simulated phishing test</h1>
-    <p>The message you just clicked was sent by your organisation through RedFlag as a
-       security-awareness exercise. It was not real, and no information was collected.</p>
-    <p>A real attacker could have used a link like this to steal your password or money.
-       Tell-tale signs to watch for next time:</p>
-    <ul>
-      <li>Urgency or threats ("verify now or your account is suspended").</li>
-      <li>A sender address or link domain that isn't the real organisation's.</li>
-      <li>Requests for a password, PIN, OTP or M-Pesa confirmation.</li>
-    </ul>
-    <p>Check your RedFlag employee portal for a short follow-up training module.</p>
-  </body>
-</html>`;
+// Shown to anyone who clicks: a styled debrief that this was a drill, outlining
+// the risk and a short warning, with no field to type anything into. Shared with
+// the SMS tracker so both channels show the same safe landing page.
+const SAFE_LANDING_HTML = debriefHtml({ channel: 'email' });
 
 function client() {
   if (!env.gophish.apiKey) throw new Error('GOPHISH_API_KEY is not set in .env');

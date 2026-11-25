@@ -7,9 +7,23 @@ const gophishClient = require('../../integrations/gophish/gophishClient');
 const smsClient = require('../../integrations/africasTalking/smsClient');
 const { maybeAssignTraining } = require('../training/training.routes');
 const { rescoreAfterEvent } = require('../scoring/scoring.service');
+const { assistLimiter, assist } = require('./templateAssist');
+const { publish, subscribe } = require('../../realtime/bus');
+const { debriefHtml } = require('../../landing/debriefPage');
 
 const router = express.Router();
 const requireAdmin = [authenticate, authorize('admin')];
+
+// Believable smishing links. The tracking path is chosen to read like a real
+// short link for the scam at hand (an M-Pesa alert links to /mpesa/…, a bank
+// alert to /secure/…), so the URL does not look like a tool endpoint. Every
+// slug — including the legacy `s` — routes to the SAME debrief page; the slug is
+// decorative and only the token identifies the recipient. The route files mount
+// exactly this whitelist, so any other path is a flat 404.
+const TRACKING_SLUGS = ['s', 'secure', 'account', 'verify', 'mpesa', 'bonga', 'sacco', 'track'];
+const CATEGORY_SLUG = { bank: 'secure', mpesa: 'mpesa', safaricom: 'bonga', sacco: 'sacco', delivery: 'track' };
+const trackingLink = (token, category) =>
+  `${env.publicBackendUrl}/${CATEGORY_SLUG[category] || 'verify'}/${token}`;
 
 const CAMPAIGN_COLUMNS = `
   id, name, type, template_key AS "templateKey", difficulty_level AS "difficultyLevel",
@@ -38,6 +52,14 @@ const EVENT_COLUMN = {
 };
 const FAILURE_COLUMNS = ['clicked_at', 'submitted_credentials_at'];
 const RESCORE_COLUMNS = [...FAILURE_COLUMNS, 'reported_at'];
+// Short event type broadcast to live dashboards, per attempt column.
+const EVENT_TYPE = {
+  sent_at: 'sent',
+  opened_at: 'opened',
+  clicked_at: 'clicked',
+  submitted_credentials_at: 'submitted',
+  reported_at: 'reported',
+};
 const LAUNCHABLE = ['draft', 'scheduled', 'failed'];
 const MAX_SEND_WINDOW = 24 * 60; // minutes
 const AUTH_REQUIRED_MESSAGE =
@@ -76,14 +98,16 @@ async function getCampaignOrgAndCategory(campaignId) {
 // seen, so replayed or out-of-order deliveries change nothing. A first click or
 // submission assigns training in the same transaction; rescoring runs after
 // commit so a down scoring service can't lose the event.
-async function recordEvent({ campaignId, employeeId, column, at }) {
+// An email click implies an open: mail clients often block the tracking pixel.
+async function recordEvent({ campaignId, employeeId, column, at, impliesOpen = false }) {
   const campaignInfo = await getCampaignOrgAndCategory(campaignId);
   const client = await db.getClient();
   let firstTime;
   try {
     await client.query('BEGIN');
+    const setOpened = impliesOpen ? ', opened_at = COALESCE(opened_at, $3)' : '';
     const { rowCount } = await client.query(
-      `UPDATE simulation_attempts SET ${column} = $3
+      `UPDATE simulation_attempts SET ${column} = $3${setOpened}
        WHERE campaign_id = $1 AND employee_id = $2 AND ${column} IS NULL`,
       [campaignId, employeeId, at],
     );
@@ -106,6 +130,17 @@ async function recordEvent({ campaignId, employeeId, column, at }) {
 
   if (firstTime && RESCORE_COLUMNS.includes(column) && campaignInfo) {
     await rescoreAfterEvent(employeeId, campaignInfo.organizationId, campaignId);
+  }
+  // Push to any live dashboards once, the first time each event is seen, so a
+  // replayed or out-of-order delivery never double-counts a statistic.
+  if (firstTime && campaignInfo) {
+    publish({
+      organizationId: campaignInfo.organizationId,
+      campaignId,
+      employeeId,
+      type: EVENT_TYPE[column] || column,
+      at: at instanceof Date ? at.toISOString() : at,
+    });
   }
   return firstTime;
 }
@@ -145,6 +180,8 @@ router.get('/templates', ...requireAdmin, async (req, res, next) => {
     return next(err);
   }
 });
+
+router.post('/templates/assist', ...requireAdmin, assistLimiter, assist);
 
 // Saves an org-level copy of a template; the global default stays untouched.
 router.put('/templates/:key', ...requireAdmin, async (req, res, next) => {
@@ -240,28 +277,23 @@ async function trackClick(req, res, next) {
   try {
     const { rows } = await db.query(
       `SELECT campaign_id AS "campaignId", employee_id AS "employeeId"
-       FROM simulation_attempts WHERE tracking_token::text = $1`,
+       FROM simulation_attempts WHERE tracking_token = $1`,
       [req.params.token],
     );
     if (rows.length === 0) return res.status(404).send('Not found');
 
     await recordEvent({ ...rows[0], column: 'clicked_at', at: new Date() });
 
-    return res.send(`<!doctype html>
-<html>
-  <head><title>Simulated Phishing Alert</title></head>
-  <body style="font-family: sans-serif; max-width: 480px; margin: 4rem auto; text-align: center;">
-    <h1>You just experienced a simulated smishing attempt</h1>
-    <p>This message was part of a RedFlag security awareness campaign run by your organization.
-       No real harm was done, but a real attacker could have used this link to steal your credentials.</p>
-    <p>Check your RedFlag employee portal for follow-up training.</p>
-  </body>
-</html>`);
+    return res.send(debriefHtml({ channel: 'sms' }));
   } catch (err) {
     return next(err);
   }
 }
-router.get('/track/:token', trackClick);
+// The public click-tracking link is mounted at the short, believable path
+// `/s/:token` on both the admin app (for local dev) and the internet-facing
+// publicApp — see app.js and publicApp.js. It is intentionally not under the
+// /api/campaigns prefix so the link a recipient sees looks like an ordinary
+// short link, not an API endpoint.
 
 // Public: Gophish webhook, HMAC-verified via GOPHISH_WEBHOOK_SECRET.
 router.post('/webhook/gophish', async (req, res, next) => {
@@ -306,11 +338,40 @@ router.post('/webhook/gophish', async (req, res, next) => {
       employeeId: employeeRows[0].id,
       column,
       at,
+      impliesOpen: FAILURE_COLUMNS.includes(column),
     });
     return res.status(200).json({ message: firstTime ? 'ok' : 'Duplicate event ignored' });
   } catch (err) {
     return next(err);
   }
+});
+
+// Admin live event stream (Server-Sent Events). The dashboard opens this with a
+// fetch stream carrying the normal Authorization header, so no token ever ends
+// up in a URL. Each connection is filtered to the admin's own organisation.
+router.get('/events', ...requireAdmin, (req, res) => {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no', // don't let a proxy buffer the stream
+  });
+  // Tell the client how soon to retry if the connection drops, then open it.
+  res.write('retry: 3000\n\n');
+
+  const send = (event) => {
+    if (event.organizationId !== req.user.organizationId) return;
+    res.write(`event: attempt\ndata: ${JSON.stringify(event)}\n\n`);
+  };
+  const unsubscribe = subscribe(send);
+  // Comment heartbeat keeps intermediaries from closing an idle connection.
+  const heartbeat = setInterval(() => res.write(': ping\n\n'), 25_000);
+
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    unsubscribe();
+    res.end();
+  });
 });
 
 router.get('/', ...requireAdmin, async (req, res, next) => {
@@ -429,6 +490,15 @@ router.get('/:id', ...requireAdmin, async (req, res, next) => {
   }
 });
 
+function isLoopbackUrl(url) {
+  try {
+    const host = new URL(url).hostname;
+    return host === 'localhost' || host === '[::1]' || /^127\./.test(host);
+  } catch {
+    return false;
+  }
+}
+
 class LaunchError extends Error {
   constructor(status, message, detail) {
     super(message);
@@ -447,7 +517,7 @@ function campaignPool(campaign) {
 
 async function loadTemplates(keys, organizationId) {
   const { rows } = await db.query(
-    `SELECT DISTINCT ON (key) key, type, subject, body FROM campaign_templates
+    `SELECT DISTINCT ON (key) key, type, subject, body, category FROM campaign_templates
      WHERE key = ANY($1::text[]) AND (organization_id = $2 OR organization_id IS NULL)
      ORDER BY key, organization_id NULLS LAST`,
     [keys, organizationId],
@@ -561,6 +631,15 @@ async function launchCampaign(campaign, organizationId, departmentId) {
     return `Email campaign launched (${employees.length} recipients${variants > 1 ? `, ${variants} message variants` : ''}${spread})`;
   }
 
+  // Africa's Talking rejects (HTTP 403) any SMS whose body links to a loopback
+  // host, so fail fast with the fix instead of an opaque provider error.
+  if (isLoopbackUrl(env.publicBackendUrl)) {
+    throw new LaunchError(
+      400,
+      'PUBLIC_BACKEND_URL points at localhost, which the SMS provider blocks',
+      'Use a public URL (tunnel), or http://lvh.me:4001 for local demos',
+    );
+  }
   const targeted = employees.filter((emp) => emp.phoneNumber);
   if (targeted.length === 0)
     throw new LaunchError(400, 'No employees with a phone number to target');
@@ -608,7 +687,7 @@ async function launchCampaign(campaign, organizationId, departmentId) {
         [campaign.id, emp.id, key],
       );
       const trackingToken = rows[0].trackingToken;
-      const trackingUrl = `${env.publicBackendUrl}/api/campaigns/track/${trackingToken}`;
+      const trackingUrl = trackingLink(trackingToken, tpl.category);
       const message = tpl.body.replace('{{link}}', trackingUrl);
       await smsClient.sendSms(emp.phoneNumber, message);
       await db.query(
@@ -694,7 +773,7 @@ async function dispatchQueuedSms() {
         const templates = await loadTemplates([attempt.templateKey], attempt.organizationId);
         const tpl = templates.get(attempt.templateKey);
         if (!tpl || !attempt.phoneNumber) throw new Error('template or phone number missing');
-        const trackingUrl = `${env.publicBackendUrl}/api/campaigns/track/${attempt.trackingToken}`;
+        const trackingUrl = trackingLink(attempt.trackingToken, tpl.category);
         await smsClient.sendSms(attempt.phoneNumber, tpl.body.replace('{{link}}', trackingUrl));
         await db.query('UPDATE simulation_attempts SET sent_at = now() WHERE id = $1', [attempt.id]);
       } catch (err) {
@@ -831,3 +910,5 @@ module.exports = router;
 module.exports.launchDueCampaigns = launchDueCampaigns;
 module.exports.dispatchQueuedSms = dispatchQueuedSms;
 module.exports.trackClick = trackClick;
+module.exports.TRACKING_SLUGS = TRACKING_SLUGS;
+module.exports.recordEvent = recordEvent;

@@ -3,6 +3,11 @@ const { authenticate, authorize } = require('../../middleware/auth');
 const db = require('../../config/db');
 
 const router = express.Router();
+
+// An attempt counts as received only once delivered: a failed or still-queued
+// send never reached the employee. A click/open/report implies delivery.
+const DELIVERED = `(simulation_attempts.sent_at IS NOT NULL OR simulation_attempts.opened_at IS NOT NULL
+  OR simulation_attempts.clicked_at IS NOT NULL OR simulation_attempts.reported_at IS NOT NULL)`;
 router.use(authenticate);
 
 function bucket(score) {
@@ -23,6 +28,7 @@ router.get('/organization', authorize('admin'), async (req, res, next) => {
       trainingResult,
       riskTrendResult,
       clickTrendResult,
+      modelResult,
     ] = await Promise.all([
       // Weighted by simulation exposure: an employee's latest score counts once per
       // simulation they received (min 1), so scores backed by more evidence weigh more.
@@ -31,7 +37,8 @@ router.get('/organization', authorize('admin'), async (req, res, next) => {
          FROM (
            SELECT DISTINCT ON (susceptibility_scores.employee_id) susceptibility_scores.score,
              GREATEST(
-               (SELECT COUNT(*) FROM simulation_attempts WHERE simulation_attempts.employee_id = employees.id),
+               (SELECT COUNT(*) FROM simulation_attempts
+                 WHERE simulation_attempts.employee_id = employees.id AND ${DELIVERED}),
                1
              ) AS weight
            FROM susceptibility_scores
@@ -93,6 +100,17 @@ router.get('/organization', authorize('admin'), async (req, res, next) => {
          GROUP BY week ORDER BY week`,
         [orgId],
       ),
+      // The scoring model version is a technical detail surfaced only here in
+      // Analytics, not next to each person's risk figure. All current scores
+      // share one version, so the most recent one represents the model in use.
+      db.query(
+        `SELECT susceptibility_scores.model_version AS "modelVersion"
+         FROM susceptibility_scores
+         JOIN employees ON employees.id = susceptibility_scores.employee_id
+         WHERE employees.organization_id = $1
+         ORDER BY susceptibility_scores.computed_at DESC LIMIT 1`,
+        [orgId],
+      ),
     ]);
 
     const riskScore =
@@ -120,6 +138,7 @@ router.get('/organization', authorize('admin'), async (req, res, next) => {
     return res.json({
       riskScore,
       riskLevel: bucket(riskScore),
+      modelVersion: modelResult.rows[0]?.modelVersion || null,
       trend: [...trendByWeek.values()].sort((a, b) => a.week.localeCompare(b.week)),
       departments: departmentResult.rows.map((row) => ({
         department: row.department || 'Unassigned',
@@ -163,7 +182,8 @@ router.get('/employee/:id', async (req, res, next) => {
         [employeeId, req.user.organizationId],
       ),
       db.query(
-        `SELECT COUNT(*) AS total, COUNT(clicked_at) AS clicked, COUNT(submitted_credentials_at) AS submitted
+        `SELECT COUNT(*) FILTER (WHERE ${DELIVERED}) AS total, COUNT(clicked_at) AS clicked,
+           COUNT(submitted_credentials_at) AS submitted
          FROM simulation_attempts
          JOIN employees ON employees.id = simulation_attempts.employee_id
          WHERE simulation_attempts.employee_id = $1 AND employees.organization_id = $2`,

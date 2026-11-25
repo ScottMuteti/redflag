@@ -9,6 +9,7 @@ jest.mock('../src/integrations/africasTalking/smsClient');
 const db = require('../src/config/db');
 const gophishClient = require('../src/integrations/gophish/gophishClient');
 const smsClient = require('../src/integrations/africasTalking/smsClient');
+const { subscribe } = require('../src/realtime/bus');
 const app = require('../src/app');
 
 function adminToken() {
@@ -84,7 +85,7 @@ describe('campaigns routes', () => {
 
   it('launches an SMS campaign with a per-employee tracking link', async () => {
     const campaign = { id: 2, name: 'Mpesa SMS Drill', type: 'sms', templateKey: 'mpesa-alert', status: 'launching' };
-    const template = { key: 'mpesa-alert', type: 'sms', subject: null, body: 'M-PESA alert: {{link}}' };
+    const template = { key: 'mpesa-alert', type: 'sms', subject: null, body: 'M-PESA alert: {{link}}', category: 'mpesa' };
     const employees = [{ id: 20, fullName: 'Employee Two', email: 'emp2@acme.co.ke', phoneNumber: '+254711111111', jobTitle: null }];
 
     mockQueries([
@@ -103,9 +104,36 @@ describe('campaigns routes', () => {
     expect(res.statusCode).toBe(200);
     expect(smsClient.sendSms).toHaveBeenCalledWith(
       '+254711111111',
-      expect.stringContaining('/api/campaigns/track/tok-123'),
+      expect.stringContaining('/mpesa/tok-123'),
     );
     expect(gophishClient.createGroup).not.toHaveBeenCalled();
+  });
+
+  it('refuses an SMS launch when tracking links would point at localhost', async () => {
+    const env = require('../src/config/env');
+    const original = env.publicBackendUrl;
+    env.publicBackendUrl = 'http://localhost:4001';
+    const campaign = { id: 2, name: 'Mpesa SMS Drill', type: 'sms', templateKey: 'mpesa-alert', status: 'launching' };
+    const template = { key: 'mpesa-alert', type: 'sms', subject: null, body: 'M-PESA alert: {{link}}' };
+    mockQueries([
+      ["SET status = 'launching'", () => ({ rows: [campaign] })],
+      ['FROM campaign_templates', () => ({ rows: [template] })],
+      ['FROM employees WHERE organization_id', () => ({ rows: [{ id: 20, phoneNumber: '+254711111111' }] })],
+      ['UPDATE simulation_campaigns', () => ({ rowCount: 1 })],
+    ]);
+
+    try {
+      const res = await request(app)
+        .post('/api/campaigns/2/launch')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ acknowledgeAuthorisation: true });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.body.message).toMatch(/localhost/);
+      expect(smsClient.sendSms).not.toHaveBeenCalled();
+    } finally {
+      env.publicBackendUrl = original;
+    }
   });
 
   it('mixed batch: sends a different template variant to each recipient', async () => {
@@ -324,6 +352,43 @@ describe('POST /api/campaigns/webhook/gophish', () => {
       new Date('2026-10-21T08:00:00Z'),
     ]);
     expect(db.query).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO training_assignments'), [3, 10]);
+    // A click implies an open even when the mail client blocked the pixel.
+    expect(db.query).toHaveBeenCalledWith(
+      expect.stringContaining('opened_at = COALESCE(opened_at, $3)'),
+      expect.any(Array),
+    );
+  });
+
+  it('publishes a live event to subscribed dashboards on a first click', async () => {
+    const events = [];
+    const unsubscribe = subscribe((e) => events.push(e));
+    mockQueries([
+      ...campaignAndEmployee,
+      ['UPDATE simulation_attempts', () => ({ rowCount: 1 })],
+      ['FROM training_modules WHERE organization_id', () => ({ rows: [{ id: 3 }] })],
+    ]);
+
+    await post({ campaign_id: 55, email: 'emp1@acme.co.ke', message: 'Clicked Link' });
+    unsubscribe();
+
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      organizationId: 1,
+      campaignId: 1,
+      employeeId: 10,
+      type: 'clicked',
+    });
+  });
+
+  it('does not publish a live event for a replayed (duplicate) click', async () => {
+    const events = [];
+    const unsubscribe = subscribe((e) => events.push(e));
+    mockQueries([...campaignAndEmployee, ['UPDATE simulation_attempts', () => ({ rowCount: 0 })]]);
+
+    await post({ campaign_id: 55, email: 'emp1@acme.co.ke', message: 'Clicked Link' });
+    unsubscribe();
+
+    expect(events).toHaveLength(0);
   });
 
   it('ignores a replayed event: no new training, no rescore', async () => {

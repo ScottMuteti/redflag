@@ -45,7 +45,7 @@ function useDialog(open, onClose, panelRef) {
   }, [open, panelRef]);
 }
 
-const SIZES = { sm: 'max-w-md', md: 'max-w-xl', lg: 'max-w-3xl' };
+const SIZES = { sm: 'max-w-md', md: 'max-w-xl', lg: 'max-w-3xl', xl: 'max-w-5xl' };
 
 export function Modal({ open, onClose, title, description, footer, size = 'md', children }) {
   const panelRef = useRef(null);

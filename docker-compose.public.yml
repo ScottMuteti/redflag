@@ -1,0 +1,27 @@
+# Public hosting via Tailscale Funnel (see go-public.ps1). Ports listen on this
+# machine only; Funnel forwards just the portal and the two tracking listeners.
+services:
+  postgres:
+    ports: !reset []
+  risk-model:
+    ports: !reset []
+  simulation-engine:
+    env_file: .env.public
+    environment:
+      NODE_ENV: production
+      OTP_DEBUG: "false"
+      TRUST_PROXY: "2" # Funnel, then nginx
+    ports: !override
+      - "127.0.0.1:4000:4000"
+      - "127.0.0.1:4001:4001"
+  gophish:
+    ports: !override
+      - "127.0.0.1:33330:3333"
+      - "127.0.0.1:8080:8080"
+  portal:
+    build:
+      context: ./portal
+      args:
+        VITE_API_URL: /api
+    ports: !override
+      - "127.0.0.1:${PORTAL_PORT:-5173}:80"

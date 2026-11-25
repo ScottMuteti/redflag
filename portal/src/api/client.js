@@ -1,7 +1,10 @@
 import axios from 'axios';
 
+// Base URL of the engine API, also used by the SSE live-event stream.
+export const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+
 const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:4000/api',
+  baseURL: API_BASE,
 });
 
 apiClient.interceptors.request.use((config) => {
@@ -17,7 +20,10 @@ apiClient.interceptors.response.use(
   (res) => res,
   (error) => {
     const isAuthCall = error.config?.url?.startsWith('/auth/');
-    if (error.response?.status === 401 && !isAuthCall) {
+    // Ignore a late 401 from a session that a newer login has already replaced.
+    const token = localStorage.getItem('redflag_token');
+    const isCurrent = !token || error.config?.headers?.Authorization === `Bearer ${token}`;
+    if (error.response?.status === 401 && !isAuthCall && isCurrent) {
       localStorage.removeItem('redflag_token');
       localStorage.removeItem('redflag_user');
       window.location.assign('/login?expired=1');

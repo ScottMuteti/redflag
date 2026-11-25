@@ -11,7 +11,8 @@ data:
 
 split:
   test_size: 0.2
-  n_folds: 5
+  n_folds: 5 # outer and inner folds of the nested CV, grouped by employee
+  n_bootstrap: 1000 # employee resamples for the hold-out 95% intervals
 
 # Grid searched inside the CV folds only (never touching the held-out set).
 grid:

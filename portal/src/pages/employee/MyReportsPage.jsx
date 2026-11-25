@@ -1,10 +1,11 @@
 /* eslint-disable react/prop-types -- page-local components */
 import { useState } from 'react';
 import { CheckCircle2, Flag, ShieldAlert } from 'lucide-react';
-import { listReports, submitReport } from '../../api/reports';
+import { getReportInfo, listReports, submitReport } from '../../api/reports';
 import {
   Badge,
   Button,
+  Callout,
   Card,
   CardHeader,
   EmptyState,
@@ -22,7 +23,14 @@ import { formatDateTime } from '../../lib/format';
 
 const EMPTY = { channel: 'email', sender: '', subject: '', details: '' };
 
-function ReportForm({ onReported }) {
+// How an unmatched (real-threat) report reads to the employee as triage advances.
+const STATUS = {
+  new: { tone: 'neutral', label: 'Under review' },
+  reviewed: { tone: 'warning', label: 'Reviewed' },
+  resolved: { tone: 'success', label: 'Resolved' },
+};
+
+function ReportForm({ onReported, reportEmail, reportSms }) {
   const toast = useToast();
   const [form, setForm] = useState(EMPTY);
   const [error, setError] = useState('');
@@ -113,26 +121,57 @@ function ReportForm({ onReported }) {
           Send report
         </Button>
       </form>
+      {(reportEmail || reportSms) && (
+        <div className="mt-4 grid gap-1 border-t border-line pt-3 text-xs text-ink-3">
+          <p className="font-semibold text-ink-2">Or report without the form:</p>
+          {reportEmail && (
+            <p>
+              Forward a suspicious email to{' '}
+              <a href={`mailto:${reportEmail}`} className="font-semibold text-brand-700">
+                {reportEmail}
+              </a>
+              .
+            </p>
+          )}
+          {reportSms && (
+            <p>
+              Forward a suspicious SMS to{' '}
+              <span className="font-semibold text-brand-700">{reportSms}</span>.
+            </p>
+          )}
+          <p>We log it and credit you automatically.</p>
+        </div>
+      )}
     </Card>
   );
 }
 
 function MyReportsPage() {
   const { data, error, loading, reload } = useAsync(listReports);
+  const info = useAsync(getReportInfo);
   const caught = (data || []).filter((r) => r.matchedSimulation).length;
 
   return (
     <>
       <PageHeader
-        title="Reports Sent"
+        title="Report a message"
         subtitle={
           data
-            ? `${data.length} reported · ${caught} simulations caught`
-            : 'Suspicious messages you flagged'
+            ? `${data.length} reported · ${caught} simulation${caught === 1 ? '' : 's'} caught`
+            : 'Flag a suspicious email or text'
         }
       />
+      <Callout tone="tip" title="Not sure? Report it anyway" className="mb-4">
+        Don’t click links or reply to a message you’re unsure about — just tell us about it below.
+        Reporting is always the safe choice, and if it turns out to be one of our tests, you’ll get
+        the credit.
+      </Callout>
       <div className="grid gap-4 lg:grid-cols-2">
-        <ReportForm onReported={reload} />
+        <ReportForm
+          onReported={reload}
+          reportEmail={info.data?.reportEmail}
+          reportSms={info.data?.reportSms}
+        />
         <Card index={1}>
           <CardHeader title="History" />
           {error && <ErrorCard message={error} onRetry={reload} />}
@@ -153,13 +192,15 @@ function MyReportsPage() {
                       {r.subject || r.sender || 'Suspicious message'}
                     </span>
                     <span className="block text-xs text-ink-3 capitalize">
-                      {r.channel} · {formatDateTime(r.createdAt)}
+                      {r.channel === 'sms' ? 'SMS' : r.channel} · {formatDateTime(r.createdAt)}
                     </span>
                   </span>
                   {r.matchedSimulation ? (
                     <Badge tone="success">Simulation caught</Badge>
                   ) : (
-                    <Badge tone="neutral">Under review</Badge>
+                    <Badge tone={STATUS[r.status]?.tone || 'neutral'}>
+                      {STATUS[r.status]?.label || 'Under review'}
+                    </Badge>
                   )}
                 </div>
               </li>
