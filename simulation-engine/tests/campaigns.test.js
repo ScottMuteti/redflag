@@ -109,6 +109,53 @@ describe('campaigns routes', () => {
     expect(gophishClient.createGroup).not.toHaveBeenCalled();
   });
 
+  it('serves the SMS inbox with each recipient\'s resolved tracking link', async () => {
+    const campaign = { id: 2, name: 'Mpesa SMS Drill', type: 'sms' };
+    const template = { key: 'mpesa-alert', type: 'sms', subject: null, body: 'M-PESA alert: {{link}}', category: 'mpesa' };
+    const attempts = [
+      {
+        employeeName: 'Employee Two',
+        departmentName: 'Finance',
+        phoneNumber: '+254711111111',
+        templateKey: 'mpesa-alert',
+        trackingToken: 'tok-123',
+        sentAt: '2026-01-01T00:00:00Z',
+        clickedAt: null,
+        sendAfter: null,
+        sendFailedAt: null,
+      },
+    ];
+
+    mockQueries([
+      ['FROM simulation_campaigns WHERE id = $1 AND organization_id', () => ({ rows: [campaign] })],
+      ['FROM simulation_attempts a', () => ({ rows: attempts })],
+      ['FROM campaign_templates', () => ({ rows: [template] })],
+    ]);
+
+    const res = await request(app)
+      .get('/api/campaigns/2/inbox')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.messages).toHaveLength(1);
+    const msg = res.body.messages[0];
+    expect(msg.body).toContain('/mpesa/tok-123');
+    expect(msg.trackingUrl).toContain('/mpesa/tok-123');
+    expect(msg.employeeName).toBe('Employee Two');
+  });
+
+  it('refuses the inbox for a non-SMS campaign', async () => {
+    mockQueries([
+      ['FROM simulation_campaigns WHERE id = $1 AND organization_id', () => ({ rows: [{ id: 1, name: 'Email', type: 'email' }] })],
+    ]);
+
+    const res = await request(app)
+      .get('/api/campaigns/1/inbox')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.statusCode).toBe(400);
+  });
+
   it('refuses an SMS launch when tracking links would point at localhost', async () => {
     const env = require('../src/config/env');
     const original = env.publicBackendUrl;

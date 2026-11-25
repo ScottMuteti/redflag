@@ -216,6 +216,11 @@ function CampaignResultsPage() {
             <Button as={Link} to="/admin/campaigns" icon={ArrowLeft}>
               Campaigns
             </Button>
+            {c?.type === 'sms' && (
+              <Button as={Link} to={`/admin/campaigns/${id}/inbox`} icon={MessageSquare}>
+                Phone preview
+              </Button>
+            )}
             {c && ['draft', 'scheduled', 'failed'].includes(c.status) && (
               <Button variant="primary" icon={Rocket} onClick={() => setConfirm('launch')}>
                 Launch now
