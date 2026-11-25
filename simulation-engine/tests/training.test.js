@@ -10,7 +10,8 @@ jest.mock('../src/modules/scoring/scoring.service', () => ({
 const db = require('../src/config/db');
 const { rescoreAfterEvent } = require('../src/modules/scoring/scoring.service');
 const app = require('../src/app');
-const { maybeAssignTraining } = require('../src/modules/training/training.routes');
+const { maybeAssignTraining, installStarterModules } = require('../src/modules/training/training.routes');
+const starterModules = require('../src/modules/training/training.starter');
 
 function token(overrides = {}) {
   return jwt.sign({ sub: 1, role: 'admin', organizationId: 1, email: 'admin@acme.co.ke', ...overrides }, process.env.JWT_SECRET);
@@ -274,5 +275,55 @@ describe('maybeAssignTraining', () => {
     db.query.mockResolvedValueOnce({ rows: [] });
     await maybeAssignTraining(1, 10, 'unknown-category');
     expect(db.query).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('installStarterModules', () => {
+  // A fake client that returns the given installed rows on the SELECT and
+  // records every write, so we can assert how an existing org is topped up.
+  function fakeClient(existingRows) {
+    const calls = [];
+    return {
+      calls,
+      query: (sql, params) => {
+        calls.push({ sql, params });
+        if (sql.startsWith('SELECT')) return Promise.resolve({ rows: existingRows });
+        return Promise.resolve({ rows: [] });
+      },
+    };
+  }
+
+  it('refreshes lessons when an installed module has gained an SMS spot lesson', async () => {
+    const bank = starterModules.find((m) => m.category === 'bank');
+    // Simulate the pre-change state: the bank module stored with only its email spot lesson.
+    const staleLessons = bank.lessons.filter((l) => l.message?.channel !== 'sms');
+    const client = fakeClient([
+      { id: 42, title: bank.title, category: 'bank', quiz: bank.quiz, lessons: staleLessons },
+    ]);
+
+    const added = await installStarterModules(1, client);
+
+    // Only bank was installed, so the other categories are inserted; bank is not.
+    expect(added).toBe(starterModules.length - 1);
+    const lessonUpdate = client.calls.find(
+      (c) => c.sql.includes('UPDATE training_modules SET lessons') && c.params[1] === 42,
+    );
+    expect(lessonUpdate).toBeTruthy();
+    const written = JSON.parse(lessonUpdate.params[0]);
+    expect(written.filter((l) => l.type === 'spot').map((l) => l.message.channel).sort()).toEqual([
+      'email',
+      'sms',
+    ]);
+  });
+
+  it('does not rewrite lessons that already match the starter definition', async () => {
+    const bank = starterModules.find((m) => m.category === 'bank');
+    const client = fakeClient([
+      { id: 42, title: bank.title, category: 'bank', quiz: bank.quiz, lessons: bank.lessons },
+    ]);
+
+    await installStarterModules(1, client);
+
+    expect(client.calls.some((c) => c.sql.includes('UPDATE training_modules SET lessons'))).toBe(false);
   });
 });
