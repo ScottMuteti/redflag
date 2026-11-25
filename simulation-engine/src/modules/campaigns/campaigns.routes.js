@@ -906,6 +906,62 @@ router.get('/:id/results', ...requireAdmin, async (req, res, next) => {
   }
 });
 
+// Admin: the SMS "phone inbox" — the exact message each recipient was sent,
+// with {{link}} resolved to that recipient's real tracking URL. The portal
+// renders it as a mock handset so the smishing link is genuinely clickable
+// (the AT sandbox simulator shows SMS as plain, non-tappable text; a real
+// anchor here drives the same click -> tracking -> debrief flow).
+router.get('/:id/inbox', ...requireAdmin, async (req, res, next) => {
+  try {
+    const { rows: campaignRows } = await db.query(
+      'SELECT id, name, type FROM simulation_campaigns WHERE id = $1 AND organization_id = $2',
+      [req.params.id, req.user.organizationId],
+    );
+    if (campaignRows.length === 0) return res.status(404).json({ message: 'Campaign not found' });
+    if (campaignRows[0].type !== 'sms') {
+      return res.status(400).json({ message: 'Inbox preview is only available for SMS campaigns' });
+    }
+
+    const { rows: attempts } = await db.query(
+      `SELECT e.full_name AS "employeeName", departments.name AS "departmentName",
+              e.phone_number AS "phoneNumber", a.template_key AS "templateKey",
+              a.tracking_token AS "trackingToken", a.sent_at AS "sentAt",
+              a.clicked_at AS "clickedAt", a.send_after AS "sendAfter",
+              a.send_failed_at AS "sendFailedAt"
+       FROM simulation_attempts a
+       JOIN employees e ON e.id = a.employee_id
+       LEFT JOIN departments ON departments.id = e.department_id
+       WHERE a.campaign_id = $1
+       ORDER BY e.full_name`,
+      [req.params.id],
+    );
+
+    const keys = [...new Set(attempts.map((a) => a.templateKey))];
+    const byKey = await loadTemplates(keys, req.user.organizationId);
+
+    const messages = attempts.map((a) => {
+      const tpl = byKey.get(a.templateKey);
+      const trackingUrl = trackingLink(a.trackingToken, tpl?.category);
+      return {
+        employeeName: a.employeeName,
+        departmentName: a.departmentName,
+        phoneNumber: a.phoneNumber,
+        trackingUrl,
+        // The believable short-link host shown as the SMS sender, e.g. "mpesa".
+        sender: CATEGORY_SLUG[tpl?.category] || 'verify',
+        body: (tpl?.body || '').replace('{{link}}', trackingUrl),
+        sentAt: a.sentAt,
+        clickedAt: a.clickedAt,
+        sendAfter: a.sendAfter,
+        sendFailedAt: a.sendFailedAt,
+      };
+    });
+    return res.json({ campaign: campaignRows[0], messages });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 module.exports = router;
 module.exports.launchDueCampaigns = launchDueCampaigns;
 module.exports.dispatchQueuedSms = dispatchQueuedSms;

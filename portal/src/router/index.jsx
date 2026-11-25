@@ -18,6 +18,7 @@ const EmployeeOverviewPage = lazy(() => import('../pages/employee/EmployeeOvervi
 const MyTrainingPage = lazy(() => import('../pages/employee/MyTrainingPage'));
 const NewCampaignPage = lazy(() => import('../pages/admin/NewCampaignPage'));
 const CampaignResultsPage = lazy(() => import('../pages/admin/CampaignResultsPage'));
+const CampaignInboxPage = lazy(() => import('../pages/admin/CampaignInboxPage'));
 const TrainingPage = lazy(() => import('../pages/admin/TrainingPage'));
 const AnalyticsPage = lazy(() => import('../pages/admin/AnalyticsPage'));
 const ReportsPage = lazy(() => import('../pages/admin/ReportsPage'));
@@ -55,6 +56,7 @@ function AppRouter() {
           <Route path="campaigns" element={<CampaignsPage />} />
           <Route path="campaigns/new" element={<NewCampaignPage />} />
           <Route path="campaigns/:id" element={<CampaignResultsPage />} />
+          <Route path="campaigns/:id/inbox" element={<CampaignInboxPage />} />
           <Route path="employees" element={<EmployeesPage />} />
           <Route path="training" element={<TrainingPage />} />
           <Route path="analytics" element={<AnalyticsPage />} />

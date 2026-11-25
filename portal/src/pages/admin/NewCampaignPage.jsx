@@ -275,7 +275,12 @@ function NewCampaignPage() {
     const keys = new Set(base.map((t) => t.key));
     return [...base, ...savedTemplates.filter((t) => !keys.has(t.key))];
   }, [data, savedTemplates]);
-  const templates = allTemplates.filter((t) => t.type === form.type);
+  // Templates shown must match BOTH the chosen channel and difficulty, so a
+  // "hard" campaign only ever offers hard templates (a missing level defaults to
+  // medium, matching how the badge renders it).
+  const templates = allTemplates.filter(
+    (t) => t.type === form.type && (t.difficultyLevel || 'medium') === form.difficultyLevel,
+  );
   const template = allTemplates.find((t) => t.key === form.templateKey);
 
   function handleGeneratedSaved(created) {
@@ -435,7 +440,19 @@ function NewCampaignPage() {
                   </div>
                 </fieldset>
                 <FormField label="Difficulty">
-                  <Select value={form.difficultyLevel} onChange={set('difficultyLevel')}>
+                  <Select
+                    value={form.difficultyLevel}
+                    onChange={(e) =>
+                      // Changing difficulty re-filters the template list, so drop
+                      // any selection that no longer belongs to the new level.
+                      setForm((f) => ({
+                        ...f,
+                        difficultyLevel: e.target.value,
+                        templateKey: '',
+                        pool: [],
+                      }))
+                    }
+                  >
                     <option value="easy">Easy</option>
                     <option value="medium">Medium</option>
                     <option value="hard">Hard</option>
@@ -514,10 +531,12 @@ function NewCampaignPage() {
 
                   {templates.length === 0 && (
                     <p className="text-body text-ink-3">
-                      No templates for this channel.{' '}
+                      No {form.difficultyLevel} {form.type === 'sms' ? 'SMS' : 'email'} templates
+                      yet. Generate one above, or{' '}
                       <Link to="/admin/templates" className="font-semibold text-brand-700">
-                        Add one
+                        add one
                       </Link>
+                      .
                     </p>
                   )}
                   {templates.map((t) => {
