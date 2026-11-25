@@ -17,6 +17,9 @@ module.exports = {
   // endpoint; the admin API never binds here. Only this port is tunnelled.
   publicPort: process.env.PUBLIC_PORT || 4001,
   jwtSecret: jwtSecret || 'change-me',
+  // Public hosting: number of proxies in front, and the only allowed browser origin.
+  trustProxy: Number(process.env.TRUST_PROXY) || 0,
+  corsOrigin: process.env.CORS_ORIGIN || '',
   db: {
     host: process.env.DB_HOST || 'localhost',
     port: process.env.DB_PORT || 5432,

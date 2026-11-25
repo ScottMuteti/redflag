@@ -102,6 +102,12 @@ function AnalyticsPage() {
         }
       />
 
+      {a?.modelVersion && (
+        <p className="-mt-2 mb-4 text-xs text-ink-3">
+          Scoring model version <span className="font-mono">{a.modelVersion}</span>
+        </p>
+      )}
+
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           index={0}

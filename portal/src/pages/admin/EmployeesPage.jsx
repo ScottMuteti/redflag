@@ -60,7 +60,6 @@ async function loadEmployees() {
         riskLevel: s?.latestScore?.riskLevel || riskLevelOf(score),
         // Score provenance — shown so a score is never presented as a bare number.
         scoreComputedAt: s?.latestScore?.computedAt || null,
-        scoreModelVersion: s?.latestScore?.modelVersion || null,
         scoreLowData: s?.latestScore?.lowData || false,
         attempts: s?.attempts || { total: 0, clicked: 0, submitted: 0 },
         training: s?.training || { totalAssignments: 0, completedAssignments: 0 },
@@ -319,7 +318,6 @@ function EmployeeDrawer({ employee, onClose, onChanged }) {
                 <Badge tone="warning">Low-data estimate</Badge>
               )}
               {employee.scoreComputedAt && <span>Computed {formatDate(employee.scoreComputedAt)}</span>}
-              {employee.scoreModelVersion && <span>· model {employee.scoreModelVersion}</span>}
             </div>
           )}
           <Button size="sm" className="mt-3" loading={busy === 'score'} onClick={rescore}>

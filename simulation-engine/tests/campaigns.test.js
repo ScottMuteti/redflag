@@ -85,7 +85,7 @@ describe('campaigns routes', () => {
 
   it('launches an SMS campaign with a per-employee tracking link', async () => {
     const campaign = { id: 2, name: 'Mpesa SMS Drill', type: 'sms', templateKey: 'mpesa-alert', status: 'launching' };
-    const template = { key: 'mpesa-alert', type: 'sms', subject: null, body: 'M-PESA alert: {{link}}' };
+    const template = { key: 'mpesa-alert', type: 'sms', subject: null, body: 'M-PESA alert: {{link}}', category: 'mpesa' };
     const employees = [{ id: 20, fullName: 'Employee Two', email: 'emp2@acme.co.ke', phoneNumber: '+254711111111', jobTitle: null }];
 
     mockQueries([
@@ -104,7 +104,7 @@ describe('campaigns routes', () => {
     expect(res.statusCode).toBe(200);
     expect(smsClient.sendSms).toHaveBeenCalledWith(
       '+254711111111',
-      expect.stringContaining('/s/tok-123'),
+      expect.stringContaining('/mpesa/tok-123'),
     );
     expect(gophishClient.createGroup).not.toHaveBeenCalled();
   });

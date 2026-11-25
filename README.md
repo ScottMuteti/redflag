@@ -74,6 +74,22 @@ It starts Docker if needed, builds and launches every service, runs the DB
 migrations, seeds the demo org, prints the logins, and opens the portal at
 <http://localhost:5173>. Safe to re-run. Stop everything with `docker compose down`.
 
+### Host it on a public link
+
+The whole platform runs on one machine. A
+[Tailscale Funnel](https://tailscale.com/kb/1223/funnel) puts it on a public
+HTTPS link — no server, no open ports.
+
+```powershell
+./go-public.ps1         # go live (copies the links)
+./go-public.ps1 -Stop   # take it down, back to local
+```
+
+Needs Tailscale installed and signed in (MagicDNS + HTTPS on). While it's live,
+anyone can open the portal from their own browser as long as this machine is
+awake and online. `start.ps1` refuses local mode while the links are up.
+See `docs/decisions/004-public-portal-funnel.md`.
+
 ### Manual (any OS)
 
 1. `cp .env.example .env` (the defaults work for a local Docker run; fill in secrets for email/SMS — see below).

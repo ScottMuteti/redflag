@@ -265,7 +265,9 @@ function Quiz({ assignment, onFinished, onRetake }) {
             aria-hidden="true"
           />
           <p className="mt-2 text-[40px] leading-none font-extrabold text-ink">
-            {Math.round(result.score * 100)}%
+            {/* Floor, not round, so the headline never shows "80%" on a 79.8% fail:
+                floor(score*100) >= 80 is exactly equivalent to passing (>= 0.80). */}
+            {Math.floor(result.score * 100)}%
           </p>
           <p className="mt-2 text-xs text-ink-3">
             Lessons {Math.round(result.lessonScore * 100)}% ({result.lessonMisses} miss
@@ -318,7 +320,7 @@ function Quiz({ assignment, onFinished, onRetake }) {
         <p className="mt-2 text-body text-ink-2">
           Passed
           {assignment.lastScore !== null &&
-            ` with ${Math.round(Number(assignment.lastScore) * 100)}%`}
+            ` with ${Math.floor(Number(assignment.lastScore) * 100)}%`}
           {assignment.quizAttempts > 1 && ` after ${assignment.quizAttempts} attempts`}.
         </p>
       </div>
@@ -399,11 +401,26 @@ function TrainingPlayerPage() {
 
   async function next() {
     const nextStep = step + 1;
+    const unsaved = misses.current;
+    misses.current = 0;
+    // The quiz endpoint rejects with "Finish the lessons first" until the final
+    // lesson's progress is saved. When the next step IS the quiz, save first and
+    // wait, so the quiz load (which mounts as soon as step advances) can't race
+    // ahead of it. Between lessons the save stays best-effort for a snappy flow.
+    if (nextStep >= lessons.length) {
+      try {
+        await saveLessonProgress(assignment.id, nextStep, unsaved);
+      } catch {
+        // Best-effort; the quiz load self-heals a missed save below.
+      }
+      setStep(nextStep);
+      setReady(false);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
     setStep(nextStep);
     setReady(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    const unsaved = misses.current;
-    misses.current = 0;
     try {
       await saveLessonProgress(assignment.id, nextStep, unsaved);
     } catch {

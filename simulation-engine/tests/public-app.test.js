@@ -49,6 +49,26 @@ describe('public surface (publicApp)', () => {
     expect(res.text).toContain('simulated phishing');
   });
 
+  it('serves the believable per-scam slugs, all to the same debrief', async () => {
+    db.query.mockImplementation((sql) =>
+      sql.includes('tracking_token')
+        ? Promise.resolve({ rows: [{ campaignId: 1, employeeId: 1 }] })
+        : Promise.resolve({ rows: [], rowCount: 0 }),
+    );
+    db.getClient.mockResolvedValue({
+      query: jest.fn().mockResolvedValue({ rows: [], rowCount: 0 }),
+      release: jest.fn(),
+    });
+    for (const slug of ['secure', 'mpesa', 'bonga', 'sacco', 'track', 'account', 'verify']) {
+      const res = await request(publicApp).get(`/${slug}/some-token`);
+      expect(res.status).toBe(200);
+      expect(res.text).toContain('simulated phishing');
+    }
+    // A path outside the whitelist is not a tracking link.
+    const bad = await request(publicApp).get('/login/some-token');
+    expect(bad.status).toBe(404);
+  });
+
   it('returns 404 for an unknown tracking token', async () => {
     db.query.mockResolvedValue({ rows: [] });
     const res = await request(publicApp).get('/s/nope');

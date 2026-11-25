@@ -70,9 +70,7 @@ function EmployeeOverviewPage() {
           loading={loading}
           label="My Risk Score"
           period={
-            data?.stats.latestScore
-              ? `${formatDate(data.stats.latestScore.computedAt)} · model ${data.stats.latestScore.modelVersion || 'n/a'}`
-              : undefined
+            data?.stats.latestScore ? formatDate(data.stats.latestScore.computedAt) : undefined
           }
           value={score ?? '—'}
           suffix={score !== null ? '/100' : undefined}

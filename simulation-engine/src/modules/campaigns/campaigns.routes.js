@@ -14,6 +14,17 @@ const { debriefHtml } = require('../../landing/debriefPage');
 const router = express.Router();
 const requireAdmin = [authenticate, authorize('admin')];
 
+// Believable smishing links. The tracking path is chosen to read like a real
+// short link for the scam at hand (an M-Pesa alert links to /mpesa/…, a bank
+// alert to /secure/…), so the URL does not look like a tool endpoint. Every
+// slug — including the legacy `s` — routes to the SAME debrief page; the slug is
+// decorative and only the token identifies the recipient. The route files mount
+// exactly this whitelist, so any other path is a flat 404.
+const TRACKING_SLUGS = ['s', 'secure', 'account', 'verify', 'mpesa', 'bonga', 'sacco', 'track'];
+const CATEGORY_SLUG = { bank: 'secure', mpesa: 'mpesa', safaricom: 'bonga', sacco: 'sacco', delivery: 'track' };
+const trackingLink = (token, category) =>
+  `${env.publicBackendUrl}/${CATEGORY_SLUG[category] || 'verify'}/${token}`;
+
 const CAMPAIGN_COLUMNS = `
   id, name, type, template_key AS "templateKey", difficulty_level AS "difficultyLevel",
   status, gophish_campaign_id AS "gophishCampaignId", scheduled_at AS "scheduledAt",
@@ -506,7 +517,7 @@ function campaignPool(campaign) {
 
 async function loadTemplates(keys, organizationId) {
   const { rows } = await db.query(
-    `SELECT DISTINCT ON (key) key, type, subject, body FROM campaign_templates
+    `SELECT DISTINCT ON (key) key, type, subject, body, category FROM campaign_templates
      WHERE key = ANY($1::text[]) AND (organization_id = $2 OR organization_id IS NULL)
      ORDER BY key, organization_id NULLS LAST`,
     [keys, organizationId],
@@ -676,7 +687,7 @@ async function launchCampaign(campaign, organizationId, departmentId) {
         [campaign.id, emp.id, key],
       );
       const trackingToken = rows[0].trackingToken;
-      const trackingUrl = `${env.publicBackendUrl}/s/${trackingToken}`;
+      const trackingUrl = trackingLink(trackingToken, tpl.category);
       const message = tpl.body.replace('{{link}}', trackingUrl);
       await smsClient.sendSms(emp.phoneNumber, message);
       await db.query(
@@ -762,7 +773,7 @@ async function dispatchQueuedSms() {
         const templates = await loadTemplates([attempt.templateKey], attempt.organizationId);
         const tpl = templates.get(attempt.templateKey);
         if (!tpl || !attempt.phoneNumber) throw new Error('template or phone number missing');
-        const trackingUrl = `${env.publicBackendUrl}/s/${attempt.trackingToken}`;
+        const trackingUrl = trackingLink(attempt.trackingToken, tpl.category);
         await smsClient.sendSms(attempt.phoneNumber, tpl.body.replace('{{link}}', trackingUrl));
         await db.query('UPDATE simulation_attempts SET sent_at = now() WHERE id = $1', [attempt.id]);
       } catch (err) {
@@ -899,4 +910,5 @@ module.exports = router;
 module.exports.launchDueCampaigns = launchDueCampaigns;
 module.exports.dispatchQueuedSms = dispatchQueuedSms;
 module.exports.trackClick = trackClick;
+module.exports.TRACKING_SLUGS = TRACKING_SLUGS;
 module.exports.recordEvent = recordEvent;

@@ -9,6 +9,13 @@ Set-Location -Path $PSScriptRoot
 
 function Section($msg) { Write-Host "`n==> $msg" -ForegroundColor Cyan }
 
+# Local mode uses weaker settings, so never start it while the links are public.
+$ts = Join-Path $env:ProgramFiles 'Tailscale	ailscale.exe'
+if ((Test-Path $ts) -and ((& $ts funnel status) -match 'Funnel on')) {
+  Write-Host 'RedFlag is public right now. Run ./go-public.ps1 -Stop first.' -ForegroundColor Red
+  exit 1
+}
+
 # 1) Make sure Docker is running (start Docker Desktop if it isn't).
 Section 'Checking Docker'
 docker info *> $null
