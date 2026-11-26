@@ -179,15 +179,27 @@ router.post('/modules', authorize('admin'), async (req, res, next) => {
 // has edited the quiz (any question not in the starter bank).
 async function installStarterModules(organizationId, client = db) {
   const { rows: existing } = await client.query(
-    'SELECT id, title, category, quiz FROM training_modules WHERE organization_id = $1',
+    'SELECT id, title, category, quiz, lessons FROM training_modules WHERE organization_id = $1',
     [organizationId],
   );
+  // Lesson fingerprint: lesson types plus each spot lesson's channel. Admins
+  // cannot edit lessons in the portal (only the quiz/metadata), so a mismatch
+  // means the starter definition has gained or changed lessons — e.g. a new SMS
+  // "spot the flag" alongside the email one — and the stored copy is refreshed.
+  const lessonSig = (lessons) =>
+    (Array.isArray(lessons) ? lessons : [])
+      .map((l) => `${l.type}:${l.message?.channel || ''}`)
+      .join('|');
   for (const row of existing) {
     const starter = starterModules.find((m) => m.category === row.category && m.title === row.title);
+    if (!starter) continue;
     const quiz = Array.isArray(row.quiz) ? row.quiz : [];
-    const bank = new Set(starter?.quiz.map((q) => q.question));
-    if (starter && quiz.length < starter.quiz.length && quiz.every((q) => bank.has(q.question))) {
+    const bank = new Set(starter.quiz.map((q) => q.question));
+    if (quiz.length < starter.quiz.length && quiz.every((q) => bank.has(q.question))) {
       await client.query('UPDATE training_modules SET quiz = $1 WHERE id = $2', [json(starter.quiz), row.id]);
+    }
+    if (lessonSig(row.lessons) !== lessonSig(starter.lessons)) {
+      await client.query('UPDATE training_modules SET lessons = $1 WHERE id = $2', [json(starter.lessons), row.id]);
     }
   }
   const have = new Set(existing.map((r) => r.category));

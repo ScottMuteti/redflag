@@ -23,7 +23,7 @@ module.exports = [
       },
       {
         type: 'spot',
-        title: 'Find the red flags',
+        title: 'Find the red flags — SMS',
         intro: 'Tap every part of this sample SMS that should make you suspicious.',
         message: {
           channel: 'sms',
@@ -50,6 +50,28 @@ module.exports = [
           ],
         },
         senderFlag: 'Sent from an ordinary mobile number, not the "MPESA" sender ID.',
+      },
+      {
+        type: 'spot',
+        title: 'Find the red flags — email',
+        intro: 'The same scam also arrives by email. Tap every suspicious part.',
+        message: {
+          channel: 'email',
+          from: 'alerts@mpesa-secure-ke.com',
+          subject: 'M-PESA account suspended — verify to restore',
+          parts: [
+            { text: 'Dear ' },
+            { text: 'Customer', flag: 'Generic greeting. A real M-Pesa alert would not address you this way.' },
+            { text: ', we have temporarily ' },
+            { text: 'suspended your M-PESA account', flag: 'Scare tactic. Safaricom does not suspend M-Pesa by email.' },
+            { text: ' after unusual activity. To avoid permanent deactivation, please ' },
+            { text: 'verify your details within 2 hours', flag: 'Artificial deadline to rush you into acting.' },
+            { text: ' at ' },
+            { text: 'mpesa-secure-ke.com', flag: 'Unofficial look-alike domain, not safaricom.co.ke.' },
+            { text: '. Never share this message with anyone.' },
+          ],
+        },
+        senderFlag: 'Safaricom does not send M-Pesa alerts from a generic look-alike email address.',
       },
       {
         type: 'choice',
@@ -184,7 +206,7 @@ module.exports = [
       },
       {
         type: 'spot',
-        title: 'Find the red flags',
+        title: 'Find the red flags — email',
         intro: 'Tap every suspicious part of this sample email.',
         message: {
           channel: 'email',
@@ -206,6 +228,25 @@ module.exports = [
           ],
         },
         senderFlag: 'Look-alike domain: safaricom-support.net, not safaricom.co.ke.',
+      },
+      {
+        type: 'spot',
+        title: 'Find the red flags — SMS',
+        intro: 'The same lure also comes by SMS. Tap every suspicious part.',
+        message: {
+          channel: 'sms',
+          from: '+254 7XX XXX 207',
+          parts: [
+            { text: 'Dear customer, unusual sign-in activity was detected on your line. ' },
+            { text: 'Your account will be suspended', flag: 'Threat of losing access, used to pressure you.' },
+            { text: ' unless you ' },
+            { text: 'verify your details within 24 hours', flag: 'Artificial deadline to rush you into acting.' },
+            { text: ' at ' },
+            { text: 'safaricom-support.link', flag: 'Unofficial look-alike address, not safaricom.co.ke.' },
+            { text: '.' },
+          ],
+        },
+        senderFlag: 'Sent from an ordinary mobile number, not the official "Safaricom" sender ID.',
       },
       {
         type: 'choice',
@@ -318,7 +359,7 @@ module.exports = [
       },
       {
         type: 'spot',
-        title: 'Find the red flags',
+        title: 'Find the red flags — email',
         intro: 'Tap the parts of this email that should make you suspicious.',
         message: {
           channel: 'email',
@@ -339,6 +380,25 @@ module.exports = [
           ],
         },
         senderFlag: 'The sender domain imitates the bank but is not its official address.',
+      },
+      {
+        type: 'spot',
+        title: 'Find the red flags — SMS',
+        intro: 'The same scam also arrives by SMS. Tap every suspicious part.',
+        message: {
+          channel: 'sms',
+          from: '+254 7XX XXX 318',
+          parts: [
+            { text: 'Your bank account has been ' },
+            { text: 'locked', flag: 'Scare tactic. Banks do not lock accounts through an SMS link.' },
+            { text: ' after a login we did not recognise. To ' },
+            { text: 'restore access within 1 hour', flag: 'Artificial deadline to rush you before you can call the bank.' },
+            { text: ' and avoid a hold on transfers, confirm your details at ' },
+            { text: 'equity-online-ke.link', flag: 'Shortened, unofficial web address — not the real bank site.' },
+            { text: '.' },
+          ],
+        },
+        senderFlag: 'Sent from an ordinary mobile number, not your bank’s official sender ID.',
       },
       {
         type: 'choice',
@@ -520,7 +580,7 @@ module.exports = [
       },
       {
         type: 'spot',
-        title: 'Find the red flags',
+        title: 'Find the red flags — SMS',
         intro: 'Tap what should make you suspicious.',
         message: {
           channel: 'sms',
@@ -543,6 +603,26 @@ module.exports = [
           ],
         },
         senderFlag: 'Sent from an ordinary mobile number, not a named courier.',
+      },
+      {
+        type: 'spot',
+        title: 'Find the red flags — email',
+        intro: 'The same scam also arrives by email. Tap every suspicious part.',
+        message: {
+          channel: 'email',
+          from: 'notice@parcel-delivery-ke.com',
+          subject: 'Parcel on hold — pay release fee to reschedule',
+          parts: [
+            { text: 'Hello, ' },
+            { text: 'you have 1 parcel waiting', flag: 'Vague. No courier name, your name, or a tracking reference.' },
+            { text: ' at our depot. It will be returned to sender unless you ' },
+            { text: 'pay a release fee of Ksh 150', flag: 'Couriers do not collect release fees through an emailed link.' },
+            { text: ' and reschedule delivery at ' },
+            { text: 'parcel-ke.com/track', flag: 'Unofficial look-alike web address.' },
+            { text: '.' },
+          ],
+        },
+        senderFlag: 'Look-alike courier domain, not an official delivery company address.',
       },
       {
         type: 'choice',
@@ -652,7 +732,7 @@ module.exports = [
       },
       {
         type: 'spot',
-        title: 'Find the red flags',
+        title: 'Find the red flags — SMS',
         intro: 'Tap the suspicious parts of this SMS.',
         message: {
           channel: 'sms',
@@ -673,6 +753,26 @@ module.exports = [
           ],
         },
         senderFlag: 'Sent from an ordinary mobile number, not your SACCO’s official sender.',
+      },
+      {
+        type: 'spot',
+        title: 'Find the red flags — email',
+        intro: 'The same scam also arrives by email. Tap every suspicious part.',
+        message: {
+          channel: 'email',
+          from: 'payments@sacco-dividends-ke.com',
+          subject: 'Your SACCO dividend is ready for disbursement',
+          parts: [
+            { text: 'Dear ' },
+            { text: 'Member', flag: 'Generic greeting — no name or member number.' },
+            { text: ', your SACCO dividend is ready. To receive it you must first ' },
+            { text: 'update your payout details', flag: 'Your SACCO already holds these, so a link to “update” them is a warning sign.' },
+            { text: ' as some records are out of date, at ' },
+            { text: 'sacco-pay-ke.com', flag: 'Unofficial look-alike domain.' },
+            { text: '. Offer valid today only.', flag: 'Pressure to act immediately.' },
+          ],
+        },
+        senderFlag: 'A real SACCO would not send payout links from a generic look-alike email address.',
       },
       {
         type: 'choice',
